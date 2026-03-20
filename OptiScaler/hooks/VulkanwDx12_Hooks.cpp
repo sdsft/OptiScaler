@@ -11,12 +11,6 @@
 
 #include <vulkan/vulkan_core.h>
 
-typedef struct VkDummyProps
-{
-    VkStructureType sType;
-    void* pNext;
-} VkDummyProps;
-
 static PFN_vkQueueSubmit o_vkQueueSubmit = nullptr;
 static PFN_vkQueueSubmit2 o_vkQueueSubmit2 = nullptr;
 static PFN_vkQueueSubmit2KHR o_vkQueueSubmit2KHR = nullptr;
@@ -6693,10 +6687,11 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit(VkQueue queue, uint32_t submitCount, con
                 }
 
                 LOG_DEBUG("    pNext chain:");
-                VkDummyProps* next = (VkDummyProps*) &pSubmits[a];
+
+                auto next = reinterpret_cast<const VkBaseOutStructure*>(&pSubmits[a]);
                 while (next->pNext != nullptr)
                 {
-                    next = (VkDummyProps*) next->pNext;
+                    next = reinterpret_cast<const VkBaseOutStructure*>(next->pNext);
 
                     if (next->sType == VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO)
                     {

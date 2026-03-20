@@ -114,34 +114,37 @@ void StreamlineHooks::streamlineLogCallback(sl::LogType type, const char* msg)
         o_logCallback(type, msg);
 }
 
-sl::Result StreamlineHooks::hkslInit(sl::Preferences* pref, uint64_t sdkVersion)
+sl::Result StreamlineHooks::hkslInit(const sl::Preferences& pref, uint64_t sdkVersion)
 {
     LOG_FUNC();
-    if (pref->logMessageCallback != &streamlineLogCallback)
-        o_logCallback = pref->logMessageCallback;
-    pref->logLevel = sl::LogLevel::eCount;
-    pref->logMessageCallback = &streamlineLogCallback;
+
+    sl::Preferences localPref = pref;
+
+    if (localPref.logMessageCallback != &streamlineLogCallback)
+        o_logCallback = localPref.logMessageCallback;
+    localPref.logLevel = sl::LogLevel::eCount;
+    localPref.logMessageCallback = &streamlineLogCallback;
 
     // renderAPI is optional so need to be careful, should only matter for Vulkan
-    renderApi = pref->renderAPI;
+    renderApi = localPref.renderAPI;
 
-    State::Instance().slFGInputs.reportEngineType(pref->engine);
+    State::Instance().slFGInputs.reportEngineType(localPref.engine);
 
     // Treat engine type set in Streamline as ground truth
-    if (pref->engine == sl::EngineType::eUnreal)
+    if (localPref.engine == sl::EngineType::eUnreal)
         State::Instance().gameQuirks |= GameQuirk::ForceUnrealEngine;
 
     // bool hookSetTag =
     //     (State::Instance().activeFgInput == FGInput::Nukems || State::Instance().activeFgInput == FGInput::DLSSG);
 
     // if (hookSetTag)
-    //     pref->flags &= ~(sl::PreferenceFlags::eAllowOTA | sl::PreferenceFlags::eLoadDownloadedPlugins);
+    //     localPref->flags &= ~(sl::PreferenceFlags::eAllowOTA | sl::PreferenceFlags::eLoadDownloadedPlugins);
 
-    return o_slInit(*pref, sdkVersion);
+    return o_slInit(localPref, sdkVersion);
 }
 
-sl::Result StreamlineHooks::hkslSetTag(sl::ViewportHandle& viewport, sl::ResourceTag* tags, uint32_t numTags,
-                                       sl::CommandBuffer* cmdBuffer)
+sl::Result StreamlineHooks::hkslSetTag(const sl::ViewportHandle& viewport, const sl::ResourceTag* tags,
+                                       uint32_t numTags, sl::CommandBuffer* cmdBuffer)
 {
     if (renderApi == sl::RenderAPI::eD3D11 || renderApi == sl::RenderAPI::eVulkan)
     {
@@ -326,14 +329,17 @@ void StreamlineHooks::streamlineLogCallback_sl1(sl1::LogType type, const char* m
         o_logCallback_sl1(type, msg);
 }
 
-bool StreamlineHooks::hkslInit_sl1(sl1::Preferences* pref, int applicationId)
+bool StreamlineHooks::hkslInit_sl1(const sl1::Preferences& pref, int applicationId)
 {
     LOG_FUNC();
-    if (pref->logMessageCallback != &streamlineLogCallback_sl1)
-        o_logCallback_sl1 = pref->logMessageCallback;
-    pref->logLevel = sl1::LogLevel::eLogLevelCount;
-    pref->logMessageCallback = &streamlineLogCallback_sl1;
-    return o_slInit_sl1(*pref, applicationId);
+
+    sl1::Preferences localPref = pref;
+
+    if (localPref.logMessageCallback != &streamlineLogCallback_sl1)
+        o_logCallback_sl1 = localPref.logMessageCallback;
+    localPref.logLevel = sl1::LogLevel::eLogLevelCount;
+    localPref.logMessageCallback = &streamlineLogCallback_sl1;
+    return o_slInit_sl1(localPref, applicationId);
 }
 
 void StreamlineHooks::hookSystemCaps(sl::param::IParameters* params)
@@ -466,7 +472,8 @@ void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature)
     }
 }
 
-bool StreamlineHooks::hkdlss_slOnPluginLoad(void* params, const char* loaderJSON, const char** pluginJSON)
+bool StreamlineHooks::hkdlss_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+                                            const char** pluginJSON)
 {
     LOG_FUNC();
 
@@ -476,7 +483,7 @@ bool StreamlineHooks::hkdlss_slOnPluginLoad(void* params, const char* loaderJSON
     uint32_t currentArch = 0;
     if (Config::Instance()->StreamlineSpoofing.value_or_default())
     {
-        hookSystemCaps((sl::param::IParameters*) params);
+        hookSystemCaps(params);
         currentArch = getSystemCapsArch();
         spoofArch(currentArch, sl::kFeatureDLSS);
     }
@@ -513,7 +520,8 @@ bool StreamlineHooks::hkdlss_slOnPluginLoad(void* params, const char* loaderJSON
     return result;
 }
 
-bool StreamlineHooks::hkdlssg_slOnPluginLoad(void* params, const char* loaderJSON, const char** pluginJSON)
+bool StreamlineHooks::hkdlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+                                             const char** pluginJSON)
 {
     LOG_FUNC();
 
@@ -527,7 +535,7 @@ bool StreamlineHooks::hkdlssg_slOnPluginLoad(void* params, const char* loaderJSO
     uint32_t currentArch = 0;
     if (shouldSpoofArch)
     {
-        hookSystemCaps((sl::param::IParameters*) params);
+        hookSystemCaps(params);
         currentArch = getSystemCapsArch();
         spoofArch(currentArch, sl::kFeatureDLSS_G);
     }
@@ -603,7 +611,8 @@ sl::Result StreamlineHooks::hkslSetConstants(const sl::Constants& values, const 
     return o_slSetConstants(values, frame, viewport);
 }
 
-bool StreamlineHooks::hkcommon_slOnPluginLoad(void* params, const char* loaderJSON, const char** pluginJSON)
+bool StreamlineHooks::hkcommon_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+                                              const char** pluginJSON)
 {
     LOG_FUNC();
 
@@ -692,7 +701,8 @@ sl::Result StreamlineHooks::hkslDLSSGGetState(const sl::ViewportHandle& viewport
     return result;
 }
 
-bool StreamlineHooks::hkreflex_slOnPluginLoad(void* params, const char* loaderJSON, const char** pluginJSON)
+bool StreamlineHooks::hkreflex_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+                                              const char** pluginJSON)
 {
     LOG_FUNC();
 
@@ -702,7 +712,7 @@ bool StreamlineHooks::hkreflex_slOnPluginLoad(void* params, const char* loaderJS
     uint32_t currentArch = 0;
     if (Config::Instance()->StreamlineSpoofing.value_or_default())
     {
-        hookSystemCaps((sl::param::IParameters*) params);
+        hookSystemCaps(params);
         currentArch = getSystemCapsArch();
         spoofArch(currentArch, sl::kFeatureReflex);
     }
@@ -881,14 +891,15 @@ sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::Fra
     return o_slPCLSetMarker(marker, frame);
 }
 
-bool StreamlineHooks::hkpcl_slOnPluginLoad(void* params, const char* loaderJSON, const char** pluginJSON)
+bool StreamlineHooks::hkpcl_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
+                                           const char** pluginJSON)
 {
     LOG_FUNC();
 
     uint32_t currentArch = 0;
     if (Config::Instance()->StreamlineSpoofing.value_or_default())
     {
-        hookSystemCaps((sl::param::IParameters*) params);
+        hookSystemCaps(params);
         currentArch = getSystemCapsArch();
         spoofArch(currentArch, sl::kFeaturePCL);
     }
