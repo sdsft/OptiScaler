@@ -767,6 +767,9 @@
     <ClInclude Include="spoofing\User32_Spoofing.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="hooks\Hook_Utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp">
