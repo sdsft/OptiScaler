@@ -94,6 +94,7 @@ class IdentifyGpu
     // Sorted by priority, the first one should be treated as the primary one
     static std::vector<GpuInformation> getAllGpus();
     static GpuInformation getPrimaryGpu();
-    static std::vector<GpuInformation> getAllGpusVulkan();
-    static GpuInformation getPrimaryGpuVulkan();
+    static std::vector<GpuInformation> getAllGpusNoDxgi();
+    static GpuInformation getPrimaryGpuNoDxgi();
+    static bool dlssSupported();
 };

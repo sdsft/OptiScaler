@@ -9,6 +9,7 @@ class DxgiFactoryHooks
 {
   public:
     static void HookToFactory(IDXGIFactory* pFactory);
+    static void HookToDLSSGFactory(IDXGIFactory* pFactory);
 
   private:
     using PFN_EnumAdapterByGpuPreference =
@@ -29,7 +30,11 @@ class DxgiFactoryHooks
     inline static PFN_CreateSwapChainForHwnd o_CreateSwapChainForHwnd = nullptr;
     inline static PFN_CreateSwapChainForCoreWindow o_CreateSwapChainForCoreWindow = nullptr;
 
-    static HRESULT CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
+    inline static PFN_CreateSwapChain o_DLSSGCreateSwapChain = nullptr;
+    inline static PFN_CreateSwapChainForHwnd o_DLSSGCreateSwapChainForHwnd = nullptr;
+    inline static PFN_CreateSwapChainForCoreWindow o_DLSSGCreateSwapChainForCoreWindow = nullptr;
+
+    static HRESULT CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, const DXGI_SWAP_CHAIN_DESC* pDesc,
                                    IDXGISwapChain** ppSwapChain);
 
     static HRESULT CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUnknown* pDevice, HWND hWnd,
@@ -40,6 +45,18 @@ class DxgiFactoryHooks
     static HRESULT CreateSwapChainForCoreWindow(IDXGIFactory2* realFactory, IUnknown* pDevice, IUnknown* pWindow,
                                                 const DXGI_SWAP_CHAIN_DESC1* pDesc, IDXGIOutput* pRestrictToOutput,
                                                 IDXGISwapChain1** ppSwapChain);
+
+    static HRESULT DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, const DXGI_SWAP_CHAIN_DESC* pDesc,
+                                        IDXGISwapChain** ppSwapChain);
+
+    static HRESULT DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUnknown* pDevice, HWND hWnd,
+                                               const DXGI_SWAP_CHAIN_DESC1* pDesc,
+                                               const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullscreenDesc,
+                                               IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain);
+
+    static HRESULT DLSSGCreateSwapChainForCoreWindow(IDXGIFactory2* realFactory, IUnknown* pDevice, IUnknown* pWindow,
+                                                     const DXGI_SWAP_CHAIN_DESC1* pDesc, IDXGIOutput* pRestrictToOutput,
+                                                     IDXGISwapChain1** ppSwapChain);
 
     static HRESULT EnumAdapters(IDXGIFactory* realFactory, UINT Adapter, IDXGIAdapter** ppAdapter);
     static HRESULT EnumAdapters1(IDXGIFactory1* realFactory, UINT Adapter, IDXGIAdapter1** ppAdapter);

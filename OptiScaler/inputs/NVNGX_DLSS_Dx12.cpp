@@ -797,10 +797,14 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_GetFeatureRequirements(
         return NVSDK_NGX_Result_Success;
     }
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::NVNGXModule() == nullptr)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && IdentifyGpu::dlssSupported() &&
+        NVNGXProxy::NVNGXModule() == nullptr)
+    {
         NVNGXProxy::InitNVNGX();
+    }
 
-    if (Config::Instance()->DLSSEnabled.value_or_default() && NVNGXProxy::D3D12_GetFeatureRequirements() != nullptr)
+    if (Config::Instance()->DLSSEnabled.value_or_default() && IdentifyGpu::dlssSupported() &&
+        NVNGXProxy::D3D12_GetFeatureRequirements() != nullptr)
     {
         LOG_DEBUG("D3D12_GetFeatureRequirements for ({0})", (int) FeatureDiscoveryInfo->FeatureID);
         auto result = NVNGXProxy::D3D12_GetFeatureRequirements()(Adapter, FeatureDiscoveryInfo, OutSupported);

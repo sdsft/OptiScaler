@@ -99,6 +99,8 @@ bool Config::Reload(std::filesystem::path iniPath)
                     FGOutput.set_from_config(FGOutput::Nukems);
                 else if (lstrcmpiA(FGOutputString.value().c_str(), "xefg") == 0)
                     FGOutput.set_from_config(FGOutput::XeFG);
+                else if (lstrcmpiA(FGOutputString.value().c_str(), "dlssg") == 0)
+                    FGOutput.set_from_config(FGOutput::DLSSG);
             }
 
             auto ftInput = readInt("FrameGen", "FTSource");
@@ -792,6 +794,8 @@ bool Config::SaveIni()
                 FGOutputString = "Nukems";
             else if (FGOutputHeld.value() == FGOutput::XeFG)
                 FGOutputString = "XeFG";
+            else if (FGOutputHeld.value() == FGOutput::DLSSG)
+                FGOutputString = "DLSSG";
         }
         ini.SetValue("FrameGen", "FGOutput", FGOutputString.c_str());
 

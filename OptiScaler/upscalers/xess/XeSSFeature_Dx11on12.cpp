@@ -12,9 +12,10 @@ XeSSFeatureDx11on12::XeSSFeatureDx11on12(unsigned int InHandleId, NVSDK_NGX_Para
     : IFeature_Dx11wDx12(InHandleId, InParameters), IFeature_Dx11(InHandleId, InParameters),
       IFeature(InHandleId, InParameters), XeSSFeature(InHandleId, InParameters)
 {
-    State::Instance().DisableChecks(77, "d3d12.dll");
+    auto owner = State::GetOwner();
+    State::Instance().DisableChecks(owner, "d3d12.dll");
     _moduleLoaded = XeSSProxy::InitXeSS() && XeSSProxy::D3D12CreateContext() != nullptr;
-    State::Instance().EnableChecks(77);
+    State::Instance().EnableChecks(owner);
 }
 
 bool XeSSFeatureDx11on12::Init(ID3D11Device* InDevice, ID3D11DeviceContext* InContext,

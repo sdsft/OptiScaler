@@ -4,6 +4,7 @@
 
 #include <framegen/ffx/FSRFG_Dx12.h>
 #include <framegen/xefg/XeFG_Dx12.h>
+#include <framegen/dlssg/DLSSG_Dx12.h>
 
 #include <inputs/FG/FSR3_Dx12_FG.h>
 #include <inputs/FG/FfxApi_Dx12_FG.h>
@@ -56,8 +57,15 @@ static bool CheckForFGStatus()
         Config::Instance()->FGOutput.set_volatile_value(FGOutput::NoFG);
         State::Instance().activeFgOutput = Config::Instance()->FGOutput.value_or_default();
     }
+    else if (State::Instance().activeFgOutput == FGOutput::DLSSG && !StreamlineProxy::LoadStreamline())
+    {
+        LOG_DEBUG("Can't init StreamlineProxy, disabling FGOutput");
+        Config::Instance()->FGOutput.set_volatile_value(FGOutput::NoFG);
+        State::Instance().activeFgOutput = Config::Instance()->FGOutput.value_or_default();
+    }
 
-    if (State::Instance().activeFgOutput != FGOutput::FSRFG && State::Instance().activeFgOutput != FGOutput::XeFG)
+    if (State::Instance().activeFgOutput != FGOutput::FSRFG && State::Instance().activeFgOutput != FGOutput::XeFG &&
+        State::Instance().activeFgOutput != FGOutput::DLSSG)
     {
         LOG_WARN("FGOutput is not set to FSR-FG or XeFG");
         return false;
@@ -95,6 +103,10 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
         else if (State::Instance().activeFgOutput == FGOutput::XeFG)
         {
             State::Instance().currentFG = new XeFG_Dx12();
+        }
+        else if (State::Instance().activeFgOutput == FGOutput::DLSSG)
+        {
+            State::Instance().currentFG = new DLSSG_Dx12();
         }
     }
 
@@ -220,6 +232,10 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
         else if (State::Instance().activeFgOutput == FGOutput::XeFG)
         {
             State::Instance().currentFG = new XeFG_Dx12();
+        }
+        else if (State::Instance().activeFgOutput == FGOutput::DLSSG)
+        {
+            State::Instance().currentFG = new DLSSG_Dx12();
         }
     }
 
@@ -1056,6 +1072,16 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         LOG_TRACE("Accuired FG->Mutex: {}", fg->Mutex.getOwner());
     }
 
+    sl::FrameToken* frameToken;
+    if (willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG)
+    {
+        ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
+
+        const uint32_t frameId = State::Instance().currentFG->FrameCount();
+        auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
+        StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentStart, *frameToken);
+    }
+
     if (willPresent && fg != nullptr)
     {
         // Some games use this callback to render UI even when
@@ -1116,6 +1142,15 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
     else
         result = o_FGSCPresent1((IDXGISwapChain1*) This, SyncInterval, Flags, pPresentParameters);
     LOG_DEBUG("Result: {:X}", result);
+
+    if (willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG)
+    {
+        const uint32_t frameId = State::Instance().currentFG->FrameCount();
+        auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
+        StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentEnd, *frameToken);
+
+        StreamlineProxy::ReflexSleep()(*frameToken);
+    }
 
     Hudfix_Dx12::PresentEnd();
 

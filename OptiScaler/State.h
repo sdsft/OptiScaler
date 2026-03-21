@@ -134,6 +134,14 @@ class State
     std::optional<std::wstring> NVNGX_DLSSD_Path;
     std::optional<std::wstring> NVNGX_DLSSG_Path;
 
+    // optis dlls
+    HMODULE optiSlInterposer = nullptr;
+    HMODULE optiSlCommon = nullptr;
+    HMODULE optiSlDLSSG = nullptr;
+    HMODULE optiSlReflex = nullptr;
+    HMODULE optiSlPCL = nullptr;
+    HMODULE optiDLSSG = nullptr;
+
     // NGX OTA
     std::string NGX_OTA_Dlss;
     std::string NGX_OTA_Dlssd;
@@ -161,6 +169,7 @@ class State
     float lastMipBiasMax = -100.0f;
 
     int xefgMaxInterpolationCount = 1;
+    int dlssgMaxInterpolationCount = 1;
 
     // DLSS
     bool dlssPresetsOverriddenExternally = false;
@@ -269,6 +278,12 @@ class State
     std::vector<ID3D12Device*> d3d12Devices;
     std::vector<ID3D11Device*> d3d11Devices;
 
+    static UINT GetOwner()
+    {
+        _lastOwner++;
+        return _lastOwner;
+    }
+
     // Moved checks here to prevent circular includes
     /// <summary>
     /// Enables skipping of LoadLibrary checks
@@ -324,6 +339,7 @@ class State
     inline static bool _skipChecks = false;
     inline static std::string _skipDllName = "";
     inline static UINT _skipOwner = 0;
+    inline static UINT _lastOwner = 0;
 
     inline static bool _serveOriginal = false;
     inline static UINT _serveOwner = 0;

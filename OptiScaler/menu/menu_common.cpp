@@ -6,6 +6,7 @@
 #include <proxies/XeSS_Proxy.h>
 #include <proxies/XeFG_Proxy.h>
 #include <proxies/FfxApi_Proxy.h>
+#include <proxies/Streamline_Proxy.h>
 
 #include <inputs/FG/DLSSG_Mod.h>
 
@@ -2937,7 +2938,7 @@ bool MenuCommon::RenderMenu()
                     { FGOutput::NoFG, "No Frame Generation" },
                     { FGOutput::Nukems, "FSR3-FG via Nukem's", "Enable DLSS-FG in-game" },
                     { FGOutput::FSRFG, "FSR FG", "FSR3/4 FG" },
-                    { FGOutput::DLSSG, "DLSSG", "Support not implemented" },
+                    { FGOutput::DLSSG, "DLSSG", "For 40xx and above" },
                     { FGOutput::XeFG, "XeFG", "XeFG" }
                 };
 
@@ -2945,7 +2946,9 @@ bool MenuCommon::RenderMenu()
 
                 // DLSSG output requirements
                 auto constexpr dlssgOutputIndex = (uint32_t) FGOutput::DLSSG;
-                outputOptions[dlssgOutputIndex].set_disabled(true, "Support not implemented");
+
+                if (!StreamlineProxy::IsD3D12Inited())
+                    outputOptions[dlssgOutputIndex].set_disabled(true, "Streamline is not inited!");
 
                 // Nukem's FG mod requirements
                 auto constexpr nukemsInputIndex = (uint32_t) FGInput::Nukems;
@@ -3036,7 +3039,8 @@ bool MenuCommon::RenderMenu()
                     }
 
                     auto fgOutput = reinterpret_cast<IFGFeature_Dx12*>(state.currentFG);
-                    if (((state.activeFgOutput == FGOutput::FSRFG || state.activeFgOutput == FGOutput::XeFG) &&
+                    if (((state.activeFgOutput == FGOutput::FSRFG || state.activeFgOutput == FGOutput::XeFG ||
+                          state.activeFgOutput == FGOutput::DLSSG) &&
                          state.activeFgInput != FGInput::NoFG && state.activeFgInput != FGInput::Nukems) &&
                         fgOutput)
                     {
@@ -3668,6 +3672,30 @@ bool MenuCommon::RenderMenu()
                     }
                 }
 
+                // DLSSG controls
+                if (state.activeFgOutput == FGOutput::DLSSG && state.activeFgInput != FGInput::NoFG &&
+                    state.currentFGSwapchain != nullptr)
+                {
+                    if (StreamlineProxy::LoadStreamline() && currentFeature != nullptr && !currentFeature->IsFrozen())
+                    {
+                        ImGui::SeparatorText("Frame Generation (DLSSG)");
+
+                        auto fgOutput = reinterpret_cast<IFGFeature_Dx12*>(state.currentFG);
+
+                        bool fgActive = config->FGEnabled.value_or_default();
+                        if (ImGui::Checkbox("Active##4", &fgActive))
+                        {
+                            config->FGEnabled = fgActive;
+                            LOG_DEBUG("Enabled set FGEnabled: {}", fgActive);
+
+                            if (config->FGEnabled.value_or_default())
+                                state.FGchanged = true;
+                        }
+
+                        ShowHelpMarker("Enable Frame Generation");
+                    }
+                }
+
                 // OptiFG
                 if (state.api == DX12 && state.currentFGSwapchain != nullptr &&
                     state.activeFgInput == FGInput::Upscaler)
@@ -3676,7 +3704,8 @@ bool MenuCommon::RenderMenu()
 
                     if (currentFeature != nullptr && !currentFeature->IsFrozen() &&
                         ((state.activeFgOutput == FGOutput::FSRFG && FfxApiProxy::IsFGReady()) ||
-                         (state.activeFgOutput == FGOutput::XeFG && XeFGProxy::Module() != nullptr)))
+                         (state.activeFgOutput == FGOutput::XeFG && XeFGProxy::Module() != nullptr) ||
+                         (state.activeFgOutput == FGOutput::DLSSG && StreamlineProxy::Module() != nullptr)))
                     {
                         bool fgHudfix = config->FGHUDFix.value_or_default();
                         bool disableHudfix = static_cast<bool>(state.gameQuirks & GameQuirk::DisableHudfix);

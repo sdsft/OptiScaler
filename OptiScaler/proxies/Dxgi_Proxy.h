@@ -29,8 +29,17 @@ class DxgiProxy
         {
             _dll = GetModuleHandle(L"dxgi.dll");
 
+            if (_dll == dllModule)
+                _dll = originalModule;
+
             if (_dll == nullptr)
-                _dll = NtdllProxy::LoadLibraryExW_Ldr(L"dxgi.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+            {
+                wchar_t sysFolder[MAX_PATH];
+                GetSystemDirectory(sysFolder, MAX_PATH);
+                std::filesystem::path sysPath(sysFolder);
+                sysPath = sysPath / L"dxgi.dll";
+                _dll = NtdllProxy::LoadLibraryExW_Ldr(sysPath.c_str(), NULL, 0);
+            }
         }
         else
         {

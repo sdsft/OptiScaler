@@ -12,6 +12,7 @@
 #include <proxies/XeFG_Proxy.h>
 #include <proxies/XeSS_Proxy.h>
 #include <proxies/IGDExt_Proxy.h>
+#include <proxies/Streamline_Proxy.h>
 #include <proxies/KernelBase_Proxy.h>
 
 #include <detours/detours.h>
@@ -1110,6 +1111,9 @@ static void HookToDevice(ID3D12Device* InDevice)
 
     if (State::Instance().activeFgInput == FGInput::Upscaler)
         ResTrack_Dx12::HookDevice(InDevice);
+
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::LoadStreamline())
+        StreamlineProxy::InitWithD3D12(InDevice);
 }
 
 static void UnhookDevice()

@@ -1067,7 +1067,8 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
 
     // Looks like when reading DLL version load methods are called
     // To prevent loops disabling checks for sl.interposer.dll
-    State::DisableChecks(7, "sl.interposer");
+    auto owner = State::GetOwner();
+    State::DisableChecks(owner, "sl.interposer");
 
     if (o_slSetTag || o_slInit || o_slInit_sl1)
         unhookInterposer();
@@ -1163,7 +1164,7 @@ void StreamlineHooks::hookInterposer(HMODULE slInterposer)
         }
     }
 
-    State::EnableChecks(7);
+    State::EnableChecks(owner);
 }
 
 // SL DLSS

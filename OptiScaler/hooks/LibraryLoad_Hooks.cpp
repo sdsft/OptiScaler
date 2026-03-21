@@ -125,11 +125,11 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     }
 
     // sl.interposer.dll
-    if (CheckDllNameW(&libName, &slInterposerNamesW))
+    if (CheckDllNameW(&libName, &slInterposerNamesW) && !normalizedPath.contains(L"\\Opti_DLLs"))
     {
         auto streamlineModule = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
 
-        if (streamlineModule != nullptr)
+        if (streamlineModule != nullptr && streamlineModule != State::Instance().optiSlInterposer)
         {
             StreamlineHooks::hookInterposer(streamlineModule);
             slInterposerModule = streamlineModule;
@@ -145,8 +145,9 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     // sl.dlss.dll
     // Try to catch something like this:
     // C:\ProgramData/NVIDIA/NGX/models/sl_dlss_0/versions/133120/files/190_E658703.dll
-    if (CheckDllNameW(&libName, &slDlssNamesW) ||
-        (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_dlss_0")))
+    if (!normalizedPath.contains(L"\\Opti_DLLs") &&
+        (CheckDllNameW(&libName, &slDlssNamesW) ||
+         (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_dlss_0"))))
     {
         auto dlssModule = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
 
@@ -163,12 +164,13 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     }
 
     // sl.dlss_g.dll
-    if (CheckDllNameW(&libName, &slDlssgNamesW) ||
-        (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_dlss_g_")))
+    if (!normalizedPath.contains(L"\\Opti_DLLs") &&
+        (CheckDllNameW(&libName, &slDlssgNamesW) ||
+         (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_dlss_g_"))))
     {
         auto dlssgModule = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
 
-        if (dlssgModule != nullptr)
+        if (dlssgModule != nullptr && dlssgModule != State::Instance().optiSlDLSSG)
         {
             StreamlineHooks::hookDlssg(dlssgModule);
         }
@@ -181,12 +183,13 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     }
 
     // sl.reflex.dll
-    if (CheckDllNameW(&libName, &slReflexNamesW) ||
-        (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_reflex_")))
+    if (!normalizedPath.contains(L"\\Opti_DLLs") &&
+        (CheckDllNameW(&libName, &slReflexNamesW) ||
+         (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_reflex_"))))
     {
         auto reflexModule = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
 
-        if (reflexModule != nullptr)
+        if (reflexModule != nullptr && reflexModule != State::Instance().optiSlReflex)
         {
             StreamlineHooks::hookReflex(reflexModule);
         }
@@ -199,12 +202,13 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     }
 
     // sl.pcl.dll
-    if (CheckDllNameW(&libName, &slPclNamesW) ||
-        (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_pcl_")))
+    if (!normalizedPath.contains(L"\\Opti_DLLs") &&
+        (CheckDllNameW(&libName, &slPclNamesW) ||
+         (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_pcl_"))))
     {
         auto pclModule = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
 
-        if (pclModule != nullptr)
+        if (pclModule != nullptr && pclModule != State::Instance().optiSlPCL)
         {
             StreamlineHooks::hookPcl(pclModule);
         }
@@ -217,12 +221,13 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
     }
 
     // sl.common.dll
-    if (CheckDllNameW(&libName, &slCommonNamesW) ||
-        (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_common_")))
+    if (!normalizedPath.contains(L"\\Opti_DLLs") &&
+        (CheckDllNameW(&libName, &slCommonNamesW) ||
+         (normalizedPath.contains(L"\\versions\\") && normalizedPath.contains(L"\\sl_common_"))))
     {
         auto commonModule = NtdllProxy::LoadLibraryExW_Ldr(lpLibFullPath, NULL, 0);
 
-        if (commonModule != nullptr)
+        if (commonModule != nullptr && commonModule != State::Instance().optiSlCommon)
         {
             StreamlineHooks::hookCommon(commonModule);
         }
@@ -810,7 +815,7 @@ void LibraryLoadHooks::CheckModulesInMemory()
         // hook streamline right away if it's already loaded
         HMODULE slModule = nullptr;
         slModule = GetDllNameWModule(&slInterposerNamesW);
-        if (slModule != nullptr)
+        if (slModule != nullptr && slModule != State::Instance().optiSlInterposer)
         {
             LOG_DEBUG("sl.interposer.dll already in memory");
             StreamlineHooks::hookInterposer(slModule);
@@ -833,7 +838,7 @@ void LibraryLoadHooks::CheckModulesInMemory()
     {
         HMODULE slDlssg = nullptr;
         slDlssg = GetDllNameWModule(&slDlssgNamesW);
-        if (slDlssg != nullptr)
+        if (slDlssg != nullptr && slDlssg != State::Instance().optiSlDLSSG)
         {
             LOG_DEBUG("sl.dlss_g.dll already in memory");
             StreamlineHooks::hookDlssg(slDlssg);
@@ -844,7 +849,7 @@ void LibraryLoadHooks::CheckModulesInMemory()
     {
         HMODULE slReflex = nullptr;
         slReflex = GetDllNameWModule(&slReflexNamesW);
-        if (slReflex != nullptr)
+        if (slReflex != nullptr && slReflex != State::Instance().optiSlReflex)
         {
             LOG_DEBUG("sl.reflex.dll already in memory");
             StreamlineHooks::hookReflex(slReflex);
@@ -855,7 +860,7 @@ void LibraryLoadHooks::CheckModulesInMemory()
     {
         HMODULE slPcl = nullptr;
         slPcl = GetDllNameWModule(&slPclNamesW);
-        if (slPcl != nullptr)
+        if (slPcl != nullptr && slPcl != State::Instance().optiSlPCL)
         {
             LOG_DEBUG("sl.pcl.dll already in memory");
             StreamlineHooks::hookPcl(slPcl);
@@ -866,7 +871,7 @@ void LibraryLoadHooks::CheckModulesInMemory()
     {
         HMODULE slCommon = nullptr;
         slCommon = GetDllNameWModule(&slCommonNamesW);
-        if (slCommon != nullptr)
+        if (slCommon != nullptr && slCommon != State::Instance().optiSlCommon)
         {
             LOG_DEBUG("sl.common.dll already in memory");
             StreamlineHooks::hookCommon(slCommon);

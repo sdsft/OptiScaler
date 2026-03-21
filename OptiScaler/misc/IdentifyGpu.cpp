@@ -369,7 +369,8 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
                     LOG_ERROR("NvAPI_GPU_GetLogicalGpuInfo failed: {}", magic_enum::enum_name(result));
 
                 // We are looking at the correct GPU for this gpuInfo.luid
-                if (IsEqualLUID(luid, gpuInfo.luid) && logicalGpuData.physicalGpuCount > 0)
+                if ((IsEqualLUID(luid, gpuInfo.luid) || (gpuInfo.luid.HighPart == 0 && gpuInfo.luid.LowPart == 0)) &&
+                    logicalGpuData.physicalGpuCount > 0)
                 {
                     if (logicalGpuData.physicalGpuCount > 1)
                         LOG_WARN("A logical GPU has more than a single physical GPU, we are only checking one");
@@ -381,7 +382,8 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
 
         auto* getArchInfo = GET_INTERFACE(NvAPI_GPU_GetArchInfo, o_NvAPI_QueryInterface);
         gpuInfo.nvidiaArchInfo.version = NV_GPU_ARCH_INFO_VER;
-        if (getArchInfo && hPhysicalGpu && getArchInfo(hPhysicalGpu, &gpuInfo.nvidiaArchInfo) != NVAPI_OK)
+        auto archResult = getArchInfo(hPhysicalGpu, &gpuInfo.nvidiaArchInfo);
+        if (getArchInfo && hPhysicalGpu && archResult != NVAPI_OK)
             LOG_ERROR("Couldn't get GPU Architecture");
 
         auto* getConnectedDisplayIds = GET_INTERFACE(NvAPI_GPU_GetConnectedDisplayIds, o_NvAPI_QueryInterface);
@@ -469,4 +471,20 @@ GpuInformation IdentifyGpu::getPrimaryGpuVulkan()
     // return GpuInformation {};
     auto allGpus = getAllGpusVulkan();
     return allGpus.size() > 0 ? allGpus[0] : GpuInformation {};
+}
+
+bool IdentifyGpu::dlssSupported()
+{
+    auto allGpus = getAllGpusNoDxgi();
+
+    if (allGpus.size() == 0)
+        return false;
+
+    for (size_t i = 0; i < allGpus.size(); i++)
+    {
+        if (allGpus[i].dlssCapable)
+            return true;
+    }
+
+    return false;
 }

@@ -224,7 +224,8 @@ struct AmdExtFfxApi : public IAmdExtFfxApi
              effectType == FFXStructType::SwapchainDX12) &&
             o_UpdateFfxApiProviderEx != nullptr)
         {
-            State::DisableChecks(1);
+            auto owner = State::GetOwner();
+            State::DisableChecks(owner);
 
             magicData data = { { 0, 1, 1, 0 }, nullptr };
             auto result = o_UpdateFfxApiProviderEx(pData, dataSizeInBytes, &data);
@@ -232,20 +233,21 @@ struct AmdExtFfxApi : public IAmdExtFfxApi
             auto level = SUCCEEDED(result) ? spdlog::level::info : spdlog::level::err;
             spdlog::log(level, "UpdateFfxApiProviderEx for: {}, result: {:#X}", effect, (UINT) result);
 
-            State::EnableChecks(1);
+            State::EnableChecks(owner);
             return result;
         }
 
         else if (o_UpdateFfxApiProvider != nullptr)
         {
-            State::DisableChecks(1);
+            auto owner = State::GetOwner();
+            State::DisableChecks(owner);
 
             auto result = o_UpdateFfxApiProvider(pData, dataSizeInBytes);
 
             auto level = SUCCEEDED(result) ? spdlog::level::info : spdlog::level::err;
             spdlog::log(level, "UpdateFfxApiProvider for: {}, result: {:#X}", effect, (UINT) result);
 
-            State::EnableChecks(1);
+            State::EnableChecks(owner);
             return result;
         }
 

@@ -5,6 +5,7 @@
 
 #include <proxies/Dxgi_Proxy.h>
 #include <proxies/D3D12_Proxy.h>
+#include <proxies/Streamline_Proxy.h>
 #include <wrapped/wrapped_factory.h>
 
 #include <DllNames.h>
@@ -16,6 +17,7 @@ static DxgiProxy::PFN_CreateDxgiFactory o_CreateDXGIFactory = nullptr;
 static DxgiProxy::PFN_CreateDxgiFactory1 o_CreateDXGIFactory1 = nullptr;
 static DxgiProxy::PFN_CreateDxgiFactory2 o_CreateDXGIFactory2 = nullptr;
 static bool creatingD3D12DeviceForLuma = false;
+static bool skipDLSSGFactory = false;
 
 #pragma intrinsic(_ReturnAddress)
 
@@ -87,19 +89,61 @@ static void CheckLumaAndReShade(IDXGIFactory* factory)
 VALIDATE_HOOK(hkCreateDXGIFactory, DxgiProxy::PFN_CreateDxgiFactory)
 inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
 {
+    DxgiProxy::PFN_CreateDxgiFactory cdf = nullptr;
+    bool dlssgFactory = false;
+
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && !skipDLSSGFactory &&
+        StreamlineProxy::CreateDxgiFactory() != nullptr)
+    {
+        cdf = StreamlineProxy::CreateDxgiFactory();
+        dlssgFactory = true;
+    }
+    else
+    {
+        cdf = o_CreateDXGIFactory;
+    }
+
     auto caller = Util::WhoIsTheCaller(_ReturnAddress());
     LOG_DEBUG("Caller: {}", caller);
 
     if (creatingD3D12DeviceForLuma)
     {
         LOG_DEBUG("Bypassing hooking/wrapping during Luma D3D12 device creation");
-        return o_CreateDXGIFactory(riid, ppFactory);
+
+        HRESULT result;
+
+        if (!skipDLSSGFactory)
+        {
+            skipDLSSGFactory = true;
+            result = cdf(riid, ppFactory);
+            skipDLSSGFactory = false;
+        }
+        else
+        {
+            result = cdf(riid, ppFactory);
+        }
+
+        return result;
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
     {
         LOG_INFO("Skipping wrapping for: {}", caller);
-        return o_CreateDXGIFactory(riid, ppFactory);
+
+        HRESULT result;
+
+        if (!skipDLSSGFactory)
+        {
+            skipDLSSGFactory = true;
+            result = cdf(riid, ppFactory);
+            skipDLSSGFactory = false;
+        }
+        else
+        {
+            result = cdf(riid, ppFactory);
+        }
+
+        return result;
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() &&
@@ -109,29 +153,61 @@ inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    State::DisableChecks(97, "dxgi");
+    HRESULT result;
+    auto owner = State::GetOwner();
+    State::DisableChecks(owner, "dxgi");
+    if (!skipDLSSGFactory)
+    {
 #ifndef ENABLE_DEBUG_LAYER_DX12
-    auto result = o_CreateDXGIFactory(riid, ppFactory);
+        skipDLSSGFactory = true;
+        result = cdf(riid, ppFactory);
+        skipDLSSGFactory = false;
 #else
-    auto result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+        result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
 #endif
-    State::EnableChecks(97);
+    }
+    else
+    {
+#ifndef ENABLE_DEBUG_LAYER_DX12
+        result = cdf(riid, ppFactory);
+#else
+        result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+#endif
+    }
+    State::EnableChecks(owner);
 
     if (result != S_OK)
         return result;
 
-    IDXGIFactory* real = nullptr;
-    if (Util::CheckForRealObject(__FUNCTION__, *ppFactory, (IUnknown**) &real))
-        *ppFactory = real;
+    // if (State::Instance().activeFgOutput != FGOutput::DLSSG ||
+    //     (StreamlineProxy::CreateDxgiFactory() != nullptr && !skipDLSSGFactory))
+    {
+        IDXGIFactory* real = nullptr;
 
-    real = (IDXGIFactory*) (*ppFactory);
+        if (State::Instance().activeFgOutput != FGOutput::DLSSG &&
+            Util::CheckForRealObject(__FUNCTION__, *ppFactory, (IUnknown**) &real))
+        {
+            *ppFactory = real;
+        }
 
-    if (Config::Instance()->DxgiFactoryWrapping.value_or_default())
-        *ppFactory = (IDXGIFactory*) (new WrappedIDXGIFactory7(real));
-    else
-        DxgiFactoryHooks::HookToFactory(real);
+        if (Config::Instance()->DxgiFactoryWrapping.value_or_default())
+        {
+            *ppFactory = (IDXGIFactory*) (new WrappedIDXGIFactory7(*ppFactory));
+        }
+        else
+        {
+            if (!dlssgFactory)
+            {
+                DxgiFactoryHooks::HookToFactory(*ppFactory);
+            }
+            else
+            {
+                DxgiFactoryHooks::HookToDLSSGFactory(*ppFactory);
+            }
+        }
+    }
 
-    CheckLumaAndReShade(real);
+    CheckLumaAndReShade(*ppFactory);
 
     return result;
 }
@@ -139,19 +215,61 @@ inline static HRESULT hkCreateDXGIFactory(REFIID riid, IDXGIFactory** ppFactory)
 VALIDATE_HOOK(hkCreateDXGIFactory1, DxgiProxy::PFN_CreateDxgiFactory1)
 inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactory)
 {
+    DxgiProxy::PFN_CreateDxgiFactory1 cdf = nullptr;
+    bool dlssgFactory = false;
+
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && !skipDLSSGFactory &&
+        StreamlineProxy::CreateDxgiFactory1() != nullptr)
+    {
+        cdf = StreamlineProxy::CreateDxgiFactory1();
+        dlssgFactory = true;
+    }
+    else
+    {
+        cdf = o_CreateDXGIFactory1;
+    }
+
     auto caller = Util::WhoIsTheCaller(_ReturnAddress());
     LOG_DEBUG("Caller: {}", caller);
 
     if (creatingD3D12DeviceForLuma)
     {
         LOG_DEBUG("Bypassing hooking/wrapping during Luma D3D12 device creation");
-        return o_CreateDXGIFactory1(riid, ppFactory);
+
+        HRESULT result;
+
+        if (!skipDLSSGFactory)
+        {
+            skipDLSSGFactory = true;
+            result = cdf(riid, ppFactory);
+            skipDLSSGFactory = false;
+        }
+        else
+        {
+            result = cdf(riid, ppFactory);
+        }
+
+        return result;
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
     {
         LOG_INFO("Skipping wrapping for: {}", caller);
-        return o_CreateDXGIFactory1(riid, ppFactory);
+
+        HRESULT result;
+
+        if (!skipDLSSGFactory)
+        {
+            skipDLSSGFactory = true;
+            result = cdf(riid, ppFactory);
+            skipDLSSGFactory = false;
+        }
+        else
+        {
+            result = cdf(riid, ppFactory);
+        }
+
+        return result;
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() &&
@@ -161,29 +279,61 @@ inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactor
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    State::DisableChecks(98, "dxgi");
+    HRESULT result;
+    auto owner = State::GetOwner();
+    State::DisableChecks(owner, "dxgi");
+    if (!skipDLSSGFactory)
+    {
 #ifndef ENABLE_DEBUG_LAYER_DX12
-    auto result = o_CreateDXGIFactory1(riid, ppFactory);
+        skipDLSSGFactory = true;
+        result = cdf(riid, ppFactory);
+        skipDLSSGFactory = false;
 #else
-    auto result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+        result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
 #endif
-    State::EnableChecks(98);
+    }
+    else
+    {
+#ifndef ENABLE_DEBUG_LAYER_DX12
+        result = cdf(riid, ppFactory);
+#else
+        result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+#endif
+    }
+    State::EnableChecks(owner);
 
     if (result != S_OK)
         return result;
 
-    IDXGIFactory1* real = nullptr;
-    if (Util::CheckForRealObject(__FUNCTION__, *ppFactory, (IUnknown**) &real))
-        *ppFactory = real;
+    // if (State::Instance().activeFgOutput != FGOutput::DLSSG ||
+    //     (StreamlineProxy::CreateDxgiFactory() != nullptr && !skipDLSSGFactory))
+    {
+        IDXGIFactory1* real = nullptr;
 
-    real = (IDXGIFactory1*) (*ppFactory);
+        if (State::Instance().activeFgOutput != FGOutput::DLSSG &&
+            Util::CheckForRealObject(__FUNCTION__, *ppFactory, (IUnknown**) &real))
+        {
+            *ppFactory = real;
+        }
 
-    if (Config::Instance()->DxgiFactoryWrapping.value_or_default())
-        *ppFactory = (IDXGIFactory1*) (new WrappedIDXGIFactory7(real));
-    else
-        DxgiFactoryHooks::HookToFactory(real);
+        if (Config::Instance()->DxgiFactoryWrapping.value_or_default())
+        {
+            *ppFactory = (IDXGIFactory1*) (new WrappedIDXGIFactory7(*ppFactory));
+        }
+        else
+        {
+            if (!dlssgFactory)
+            {
+                DxgiFactoryHooks::HookToFactory(*ppFactory);
+            }
+            else
+            {
+                DxgiFactoryHooks::HookToDLSSGFactory(*ppFactory);
+            }
+        }
+    }
 
-    CheckLumaAndReShade(real);
+    CheckLumaAndReShade(*ppFactory);
 
     return result;
 }
@@ -191,19 +341,61 @@ inline static HRESULT hkCreateDXGIFactory1(REFIID riid, IDXGIFactory1** ppFactor
 VALIDATE_HOOK(hkCreateDXGIFactory2, DxgiProxy::PFN_CreateDxgiFactory2)
 inline static HRESULT hkCreateDXGIFactory2(UINT Flags, REFIID riid, IDXGIFactory2** ppFactory)
 {
+    DxgiProxy::PFN_CreateDxgiFactory2 cdf = nullptr;
+    bool dlssgFactory = false;
+
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && !skipDLSSGFactory &&
+        StreamlineProxy::CreateDxgiFactory2() != nullptr)
+    {
+        cdf = StreamlineProxy::CreateDxgiFactory2();
+        dlssgFactory = true;
+    }
+    else
+    {
+        cdf = o_CreateDXGIFactory2;
+    }
+
     auto caller = Util::WhoIsTheCaller(_ReturnAddress());
     LOG_DEBUG("Caller: {}", caller);
 
     if (creatingD3D12DeviceForLuma)
     {
         LOG_DEBUG("Bypassing hooking/wrapping during Luma D3D12 device creation");
-        return o_CreateDXGIFactory2(Flags, riid, ppFactory);
+
+        HRESULT result;
+
+        if (!skipDLSSGFactory)
+        {
+            skipDLSSGFactory = true;
+            result = cdf(Flags, riid, ppFactory);
+            skipDLSSGFactory = false;
+        }
+        else
+        {
+            result = cdf(Flags, riid, ppFactory);
+        }
+
+        return result;
     }
 
     if (Config::Instance()->DxgiFactoryWrapping.value_or_default() && CheckDllName(&caller, &skipDxgiWrappingNames))
     {
         LOG_INFO("Skipping wrapping for: {}", caller);
-        return o_CreateDXGIFactory2(Flags, riid, ppFactory);
+
+        HRESULT result;
+
+        if (!skipDLSSGFactory)
+        {
+            skipDLSSGFactory = true;
+            result = cdf(Flags, riid, ppFactory);
+            skipDLSSGFactory = false;
+        }
+        else
+        {
+            result = cdf(Flags, riid, ppFactory);
+        }
+
+        return result;
     }
 
     LOG_DEBUG("Caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
@@ -215,29 +407,61 @@ inline static HRESULT hkCreateDXGIFactory2(UINT Flags, REFIID riid, IDXGIFactory
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    State::DisableChecks(99, "dxgi");
+    HRESULT result;
+    auto owner = State::GetOwner();
+    State::DisableChecks(owner, "dxgi");
+    if (!skipDLSSGFactory)
+    {
 #ifndef ENABLE_DEBUG_LAYER_DX12
-    auto result = o_CreateDXGIFactory2(Flags, riid, ppFactory);
+        skipDLSSGFactory = true;
+        result = cdf(Flags, riid, ppFactory);
+        skipDLSSGFactory = false;
 #else
-    auto result = o_CreateDXGIFactory2(Flags | DXGI_CREATE_FACTORY_DEBUG, riid, ppFactory);
+        result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
 #endif
-    State::EnableChecks(99);
+    }
+    else
+    {
+#ifndef ENABLE_DEBUG_LAYER_DX12
+        result = cdf(Flags, riid, ppFactory);
+#else
+        result = o_CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, riid, (IDXGIFactory2**) ppFactory);
+#endif
+    }
+    State::EnableChecks(owner);
 
     if (result != S_OK)
         return result;
 
-    IDXGIFactory2* real = nullptr;
-    if (Util::CheckForRealObject(__FUNCTION__, *ppFactory, (IUnknown**) &real))
-        *ppFactory = real;
+    // if (State::Instance().activeFgOutput != FGOutput::DLSSG ||
+    //     (StreamlineProxy::CreateDxgiFactory() != nullptr && !skipDLSSGFactory))
+    {
+        IDXGIFactory2* real = nullptr;
 
-    real = (IDXGIFactory2*) (*ppFactory);
+        if (State::Instance().activeFgOutput != FGOutput::DLSSG &&
+            Util::CheckForRealObject(__FUNCTION__, *ppFactory, (IUnknown**) &real))
+        {
+            *ppFactory = real;
+        }
 
-    if (Config::Instance()->DxgiFactoryWrapping.value_or_default())
-        *ppFactory = (IDXGIFactory2*) (new WrappedIDXGIFactory7(real));
-    else
-        DxgiFactoryHooks::HookToFactory(real);
+        if (Config::Instance()->DxgiFactoryWrapping.value_or_default())
+        {
+            *ppFactory = (IDXGIFactory2*) (new WrappedIDXGIFactory7(*ppFactory));
+        }
+        else
+        {
+            if (!dlssgFactory)
+            {
+                DxgiFactoryHooks::HookToFactory(*ppFactory);
+            }
+            else
+            {
+                DxgiFactoryHooks::HookToDLSSGFactory(*ppFactory);
+            }
+        }
+    }
 
-    CheckLumaAndReShade(real);
+    CheckLumaAndReShade(*ppFactory);
 
     return result;
 }
