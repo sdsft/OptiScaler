@@ -246,6 +246,7 @@ void IFGFeature_Dx12::FlipResource(Dx12Resource* resource)
         if (result)
         {
             LOG_TRACE("Setting {} from flip, index: {}", magic_enum::enum_name(type), fIndex);
+            resource->validity = FG_ResourceValidity::UntilPresent;
             resource->copy = flipOutput;
             resource->state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         }

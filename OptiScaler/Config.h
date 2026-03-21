@@ -507,7 +507,7 @@ class Config
     CustomOptional<bool> FSRFGSkipDispatchForHudless { false };
     CustomOptional<bool> FSRFGEnableWatermark { false };
 
-    // OptiFG - XeFG
+    // XeFG
     CustomOptional<bool> FGXeFGIgnoreInitChecks { false };
     CustomOptional<int> FGXeFGInterpolationCount { 1 };
     CustomOptional<bool> FGXeFGUIComposition { false };
@@ -516,6 +516,9 @@ class Config
     CustomOptional<bool> FGXeFGHighResMV { false };
     CustomOptional<bool> FGXeFGDebugView { false };
     CustomOptional<bool> FGXeFGForceBorderless { false };
+
+    // DLSSG
+    CustomOptional<int> FGDLSSGInterpolationCount { 1 };
 
     // fakenvapi
     CustomOptional<bool> UseFakenvapi { true };

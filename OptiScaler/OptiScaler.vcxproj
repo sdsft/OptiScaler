@@ -116,7 +116,7 @@
     <LibraryPath>$(ProjectDir)library\fsr2;$(ProjectDir)library\fsr2_212;$(ProjectDir)library\fsr31;$(ProjectDir)library\vulkan;$(ProjectDir)library\d3dx;$(ProjectDir)library\detours;$(SolutionDir)external\xess\lib;$(SolutionDir)external\freetype;$(LibraryPath)</LibraryPath>
     <IntDir>.\x64\Debug\</IntDir>
     <TargetExt>.dll</TargetExt>
-    <OutDir>D:\Deep Rock Galactic\FSD\Binaries\Win64\</OutDir>
+    <OutDir>D:\Banishers Ghosts of New Eden\NWD\Binaries\Win64\</OutDir>
     <TargetName>dxgi</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

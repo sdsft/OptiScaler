@@ -198,6 +198,13 @@ bool Config::Reload(std::filesystem::path iniPath)
             FGXeFGForceBorderless.set_from_config(readBool("XeFG", "ForceBorderless"));
         }
 
+        {
+            FGDLSSGInterpolationCount.set_from_config(readInt("DLSSG", "InterpolationCount"));
+            if (FGDLSSGInterpolationCount.has_value() &&
+                (FGDLSSGInterpolationCount.value() < 1 || FGDLSSGInterpolationCount.value() > 6))
+                FGDLSSGInterpolationCount.reset();
+        }
+
         // FSR FG Inputs
         {
             FSRFGSkipConfigForHudless.set_from_config(readBool("FSRFGInputs", "SkipConfigForHudless"));
@@ -872,6 +879,11 @@ bool Config::SaveIni()
         ini.SetValue("XeFG", "DebugView", GetBoolValue(Instance()->FGXeFGDebugView.value_for_config()).c_str());
         ini.SetValue("XeFG", "ForceBorderless",
                      GetBoolValue(Instance()->FGXeFGForceBorderless.value_for_config()).c_str());
+    }
+
+    {
+        ini.SetValue("DLSSG", "InterpolationCount",
+                     GetIntValue(Instance()->FGDLSSGInterpolationCount.value_for_config()).c_str());
     }
 
     // OptiFG

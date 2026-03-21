@@ -34,7 +34,7 @@ class DxgiFactoryHooks
     inline static PFN_CreateSwapChainForHwnd o_DLSSGCreateSwapChainForHwnd = nullptr;
     inline static PFN_CreateSwapChainForCoreWindow o_DLSSGCreateSwapChainForCoreWindow = nullptr;
 
-    static HRESULT CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, const DXGI_SWAP_CHAIN_DESC* pDesc,
+    static HRESULT CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
                                    IDXGISwapChain** ppSwapChain);
 
     static HRESULT CreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUnknown* pDevice, HWND hWnd,
@@ -46,7 +46,7 @@ class DxgiFactoryHooks
                                                 const DXGI_SWAP_CHAIN_DESC1* pDesc, IDXGIOutput* pRestrictToOutput,
                                                 IDXGISwapChain1** ppSwapChain);
 
-    static HRESULT DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, const DXGI_SWAP_CHAIN_DESC* pDesc,
+    static HRESULT DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
                                         IDXGISwapChain** ppSwapChain);
 
     static HRESULT DLSSGCreateSwapChainForHwnd(IDXGIFactory2* realFactory, IUnknown* pDevice, HWND hWnd,

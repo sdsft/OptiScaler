@@ -151,7 +151,7 @@ struct feature_version
         {
             if (isdigit((unsigned char) p[0]))
             {
-                if (sscanf(p, "%u.%u.%u", &major, &minor, &patch) == 3)
+                if (sscanf_s(p, "%u.%u.%u", &major, &minor, &patch) == 3)
                     return;
             }
             ++p;

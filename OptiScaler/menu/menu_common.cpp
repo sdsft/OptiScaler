@@ -3546,12 +3546,12 @@ bool MenuCommon::RenderMenu()
 
                         ShowHelpMarker("Enable Frame Generation");
 
-                        ImGui::SameLine(0.0f, 16.0f);
-
                         auto maxInterpolationCount = state.xefgMaxInterpolationCount;
 
                         if (maxInterpolationCount > 1)
                         {
+                            ImGui::SameLine(0.0f, 16.0f);
+
                             const char* intModes[] = { "2X", "3X", "4X", "5X", "6X" };
                             auto currentSet = config->FGXeFGInterpolationCount.value_or_default() - 1;
                             auto currentIntCount = intModes[currentSet];
@@ -3693,6 +3693,37 @@ bool MenuCommon::RenderMenu()
                         }
 
                         ShowHelpMarker("Enable Frame Generation");
+
+                        auto maxInterpolationCount = state.dlssgMaxInterpolationCount;
+
+                        if (maxInterpolationCount > 1)
+                        {
+                            ImGui::SameLine(0.0f, 16.0f);
+
+                            const char* intModes[] = { "2X", "3X", "4X", "5X", "6X" };
+                            auto currentSet = config->FGDLSSGInterpolationCount.value_or_default() - 1;
+                            auto currentIntCount = intModes[currentSet];
+
+                            ImGui::PushItemWidth(95.0f * menuResScale);
+
+                            if (ImGui::BeginCombo("MFG", currentIntCount))
+                            {
+                                for (int i = 0; i < maxInterpolationCount; i++)
+                                {
+                                    if (ImGui::Selectable(intModes[i], (currentSet == i)))
+                                    {
+                                        LOG_DEBUG("DLSSG Interpolation Count set to: {}", i + 1);
+                                        config->FGDLSSGInterpolationCount = i + 1;
+                                    }
+                                }
+
+                                ImGui::EndCombo();
+                            }
+
+                            ImGui::PopItemWidth();
+
+                            ShowHelpMarker("Set DLSSG interpolation count");
+                        }
                     }
                 }
 

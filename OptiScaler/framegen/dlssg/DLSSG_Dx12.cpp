@@ -116,6 +116,19 @@ bool DLSSG_Dx12::CreateSwapchain(IDXGIFactory* factory, ID3D12CommandQueue* cmdQ
         return false;
     }
 
+    sl::DLSSGState dlssgState {};
+    sl::DLSSGOptions dlssgOptions {};
+    if (StreamlineProxy::DLSSGGetState()(viewport, dlssgState, &dlssgOptions) == sl::Result::eOk)
+    {
+        State::Instance().dlssgMaxInterpolationCount = dlssgState.numFramesToGenerateMax;
+        LOG_INFO("Max supported interpolations: {}", dlssgState.numFramesToGenerateMax);
+
+        int maxCount = State::Instance().dlssgMaxInterpolationCount;
+
+        if (_framesToInterpolate > State::Instance().dlssgMaxInterpolationCount)
+            _framesToInterpolate = maxCount;
+    }
+
     _gameCommandQueue = cmdQueue;
     _swapChain = *swapChain;
     _hwnd = desc->OutputWindow;
@@ -207,6 +220,19 @@ bool DLSSG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
         return false;
     }
 
+    sl::DLSSGState dlssgState {};
+    sl::DLSSGOptions dlssgOptions {};
+    if (StreamlineProxy::DLSSGGetState()(viewport, dlssgState, &dlssgOptions) == sl::Result::eOk)
+    {
+        State::Instance().dlssgMaxInterpolationCount = dlssgState.numFramesToGenerateMax;
+        LOG_INFO("Max supported interpolations: {}", dlssgState.numFramesToGenerateMax);
+
+        int maxCount = State::Instance().dlssgMaxInterpolationCount;
+
+        if (_framesToInterpolate > State::Instance().dlssgMaxInterpolationCount)
+            _framesToInterpolate = maxCount;
+    }
+
     _gameCommandQueue = cmdQueue;
     _swapChain = *swapChain;
     _hwnd = hwnd;
@@ -217,6 +243,9 @@ bool DLSSG_Dx12::CreateSwapchain1(IDXGIFactory* factory, ID3D12CommandQueue* cmd
 void DLSSG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
 {
     LOG_DEBUG("");
+
+    if (_device != nullptr)
+        return;
 
     _device = device;
     CreateObjects(device);
@@ -299,6 +328,36 @@ bool DLSSG_Dx12::Dispatch()
     }
 
     auto& state = State::Instance();
+
+    if (Config::Instance()->FGDLSSGInterpolationCount.value_or_default() > State::Instance().dlssgMaxInterpolationCount)
+    {
+        Config::Instance()->FGDLSSGInterpolationCount = State::Instance().dlssgMaxInterpolationCount;
+        LOG_WARN("Requested interpolation count is higher than max supported, setting to max: {}",
+                 State::Instance().dlssgMaxInterpolationCount);
+    }
+
+    if (_framesToInterpolate != Config::Instance()->FGDLSSGInterpolationCount.value_or_default())
+    {
+        LOG_INFO("Interpolation count changed {} -> {}", _framesToInterpolate,
+                 Config::Instance()->FGDLSSGInterpolationCount.value_or_default());
+
+        sl::DLSSGOptions dlssgOptions {};
+        dlssgOptions.mode = sl::DLSSGMode::eOn;
+        dlssgOptions.numFramesToGenerate = Config::Instance()->FGDLSSGInterpolationCount.value_or_default();
+
+        auto optionResult = StreamlineProxy::DLSSGSetOptions()(viewport, dlssgOptions);
+
+        if (optionResult != sl::Result::eOk)
+        {
+            LOG_ERROR("DLSSGSetOptions error: {} ({})", magic_enum::enum_name(optionResult), (UINT) optionResult);
+        }
+        else
+        {
+            LOG_DEBUG("Interpolation count set to: {}",
+                      Config::Instance()->FGDLSSGInterpolationCount.value_or_default());
+            _framesToInterpolate = Config::Instance()->FGDLSSGInterpolationCount.value_or_default();
+        }
+    }
 
     if (!_haveHudless.has_value())
     {
@@ -467,7 +526,12 @@ void DLSSG_Dx12::EvaluateState(ID3D12Device* device, FG_Constants& fgConstants)
     // If FG Enabled from menu
     if (Config::Instance()->FGEnabled.value_or_default())
     {
-        if (state.FGchanged)
+        if (_device == nullptr)
+        {
+            // Create it again
+            CreateContext(device, fgConstants);
+        }
+        else if (state.FGchanged)
         {
             LOG_DEBUG("FGChanged");
             Deactivate();

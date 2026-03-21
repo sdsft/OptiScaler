@@ -172,8 +172,8 @@ void DxgiFactoryHooks::HookToDLSSGFactory(IDXGIFactory* pFactory)
     DetourTransactionCommit();
 }
 
-HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice,
-                                          const DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain)
+HRESULT DxgiFactoryHooks::CreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc,
+                                          IDXGISwapChain** ppSwapChain)
 {
     *ppSwapChain = nullptr;
 
@@ -917,7 +917,7 @@ HRESULT DxgiFactoryHooks::CreateSwapChainForCoreWindow(IDXGIFactory2* realFactor
 }
 
 HRESULT DxgiFactoryHooks::DLSSGCreateSwapChain(IDXGIFactory* realFactory, IUnknown* pDevice,
-                                               const DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain)
+                                               DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain)
 {
     *ppSwapChain = nullptr;
 
