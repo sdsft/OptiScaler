@@ -1213,6 +1213,9 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
     if (quirks & GameQuirk::DoNotPreserveFGSwapChain)
         stringQuirks.push_back("Don't Preserve FG Swapchain");
 
+    if (quirks & GameQuirk::OldOverlayMenu)
+        stringQuirks.push_back("Using old overlay (draws on upscaled image)");
+
     state->detectedQuirks.append_range(stringQuirks);
     for (auto& stringQuirk : stringQuirks)
         spdlog::info("Quirk: {}", stringQuirk);
@@ -1382,6 +1385,11 @@ static void CheckQuirks(bool isNvidia)
     if (quirks & GameQuirk::DoNotPreserveFGSwapChain && !Config::Instance()->FGPreserveSwapChain.has_value())
     {
         Config::Instance()->FGPreserveSwapChain.set_volatile_value(false);
+    }
+
+    if (quirks & GameQuirk::OldOverlayMenu && !Config::Instance()->OverlayMenu.has_value())
+    {
+        Config::Instance()->OverlayMenu.set_volatile_value(false);
     }
 
     // For Luma, we assume if Luma addon in game folder it's used
