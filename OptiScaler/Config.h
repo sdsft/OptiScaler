@@ -519,6 +519,7 @@ class Config
 
     // DLSSG
     CustomOptional<int> FGDLSSGInterpolationCount { 1 };
+    CustomOptional<bool> FGDLSSGUseGamesReflexMarkers { false };
 
     // fakenvapi
     CustomOptional<bool> UseFakenvapi { true };

@@ -15,6 +15,8 @@
 #include <misc/FrameLimit.h>
 #include <upscaler_time/UpscalerTime_Dx12.h>
 
+#include <hooks/Reflex_Hooks.h>
+
 #include <detours/detours.h>
 
 #include <d3d12.h>
@@ -1072,14 +1074,17 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         LOG_TRACE("Accuired FG->Mutex: {}", fg->Mutex.getOwner());
     }
 
-    sl::FrameToken* frameToken;
+    sl::FrameToken* frameToken = nullptr;
     if (willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG)
     {
         ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
 
-        const uint32_t frameId = State::Instance().currentFG->FrameCount();
-        auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
-        StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentStart, *frameToken);
+        if (!ReflexHooks::isReflexHooked() || !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
+        {
+            const uint32_t frameId = State::Instance().currentFG->FrameCount();
+            auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
+            StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentStart, *frameToken);
+        }
     }
 
     if (willPresent && fg != nullptr)
@@ -1143,7 +1148,8 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         result = o_FGSCPresent1((IDXGISwapChain1*) This, SyncInterval, Flags, pPresentParameters);
     LOG_DEBUG("Result: {:X}", result);
 
-    if (willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG)
+    if ((!ReflexHooks::isReflexHooked() || !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default()) &&
+        willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG)
     {
         const uint32_t frameId = State::Instance().currentFG->FrameCount();
         auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);

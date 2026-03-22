@@ -8,6 +8,7 @@
 #include <Util.h>
 #include <Config.h>
 #include <proxies/KernelBase_Proxy.h>
+#include <proxies/Streamline_Proxy.h>
 #include <menu/menu_overlay_base.h>
 #include <hooks/Reflex_Hooks.h>
 #include <magic_enum.hpp>
@@ -51,6 +52,7 @@ StreamlineHooks::PFN_slGetPluginFunction StreamlineHooks::o_reflex_slGetPluginFu
 StreamlineHooks::PFN_slSetConstants_sl1 StreamlineHooks::o_reflex_slSetConstants_sl1 = nullptr;
 StreamlineHooks::PFN_slOnPluginLoad StreamlineHooks::o_reflex_slOnPluginLoad = nullptr;
 decltype(&slReflexSetOptions) StreamlineHooks::o_slReflexSetOptions = nullptr;
+decltype(&slReflexSleep) StreamlineHooks::o_slReflexSleep = nullptr;
 sl::ReflexMode StreamlineHooks::reflexGamesLastMode = sl::ReflexMode::eOff;
 
 // PCL
@@ -755,6 +757,14 @@ sl::Result StreamlineHooks::hkslReflexSetOptions(const sl::ReflexOptions& option
     return o_slReflexSetOptions(newOptions);
 }
 
+sl::Result StreamlineHooks::hkslReflexSleep(const sl::FrameToken& frame)
+{
+    // if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited())
+    //     return StreamlineProxy::ReflexSleep()(frame);
+
+    return o_slReflexSleep(frame);
+}
+
 void* StreamlineHooks::hkdlss_slGetPluginFunction(const char* functionName)
 {
     // LOG_DEBUG("{}", functionName);
@@ -853,6 +863,12 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(const char* functionName)
     {
         o_slReflexSetOptions = (decltype(&slReflexSetOptions)) o_reflex_slGetPluginFunction(functionName);
         return &hkslReflexSetOptions;
+    }
+
+    if (strcmp(functionName, "slReflexSleep") == 0)
+    {
+        o_slReflexSleep = (decltype(&slReflexSleep)) o_reflex_slGetPluginFunction(functionName);
+        return &hkslReflexSleep;
     }
 
     return o_reflex_slGetPluginFunction(functionName);

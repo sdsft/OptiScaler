@@ -4,6 +4,8 @@
 
 #include <nvapi/fakenvapi.h>
 
+#include <proxies/Streamline_Proxy.h>
+
 #include <magic_enum.hpp>
 #include <nvapi/fakenvapi/nvapi_calls.h>
 
@@ -53,6 +55,31 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
     LOG_FUNC();
 #endif
 
+    static bool skip = false;
+
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
+        Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
+    {
+        if (!skip)
+        {
+            sl::FrameToken* frameToken;
+            uint32_t frameCount = State::Instance().currentFG->FrameCount();
+            StreamlineProxy::GetNewFrameToken()(frameToken, &frameCount);
+
+            LOG_TRACE("Sleep for frame {}", frameCount);
+
+            skip = true;
+            StreamlineProxy::ReflexSleep()(*frameToken);
+            skip = false;
+
+            return NvAPI_Status::NVAPI_OK;
+        }
+        else
+        {
+            return o_NvAPI_D3D_Sleep(pDev);
+        }
+    }
+
     CALL_XEFG_NVAPI(NvAPI_D3D_Sleep, pDev);
 
     return o_NvAPI_D3D_Sleep(pDev);
@@ -75,6 +102,107 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_SetLatencyMarker(IUnknown* pDev,
 #ifdef LOG_REFLEX_CALLS
     LOG_FUNC();
 #endif
+
+    static bool skip[20] = {};
+
+    if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
+        Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
+    {
+        sl::PCLMarker marker {};
+        bool noMarker = false;
+
+        switch (pSetLatencyMarkerParams->markerType)
+        {
+        case SIMULATION_START:
+            marker = sl::PCLMarker::eSimulationStart;
+            break;
+
+        case SIMULATION_END:
+            marker = sl::PCLMarker::eSimulationEnd;
+            break;
+
+        case RENDERSUBMIT_START:
+            marker = sl::PCLMarker::eRenderSubmitStart;
+            break;
+
+        case RENDERSUBMIT_END:
+            marker = sl::PCLMarker::eRenderSubmitEnd;
+            break;
+
+        case PRESENT_START:
+            marker = sl::PCLMarker::ePresentStart;
+            break;
+
+        case PRESENT_END:
+            marker = sl::PCLMarker::ePresentEnd;
+            break;
+
+        case INPUT_SAMPLE:
+            marker = sl::PCLMarker::eControllerInputSample;
+            break;
+
+        case TRIGGER_FLASH:
+            marker = sl::PCLMarker::eTriggerFlash;
+            break;
+
+        case PC_LATENCY_PING:
+            marker = sl::PCLMarker::eDeltaTCalculation;
+            break;
+
+        case OUT_OF_BAND_RENDERSUBMIT_START:
+            marker = sl::PCLMarker::eOutOfBandRenderSubmitStart;
+            break;
+
+        case OUT_OF_BAND_RENDERSUBMIT_END:
+            marker = sl::PCLMarker::eOutOfBandRenderSubmitEnd;
+            break;
+
+        case OUT_OF_BAND_PRESENT_START:
+            marker = sl::PCLMarker::eOutOfBandPresentStart;
+            break;
+
+        case OUT_OF_BAND_PRESENT_END:
+            marker = sl::PCLMarker::eOutOfBandPresentEnd;
+            break;
+
+        default:
+            noMarker = true;
+        }
+
+        auto index = (UINT) marker;
+
+        if (!noMarker && !skip[index])
+        {
+            if (pSetLatencyMarkerParams->markerType == PRESENT_START && State::Instance().currentFG != nullptr)
+            {
+                auto frameCount = State::Instance().currentFG->FrameCount();
+                if (pSetLatencyMarkerParams->frameID - frameCount > 1)
+                    LOG_WARN("FrameId Moved too much??? {} -> {}", frameCount, pSetLatencyMarkerParams->frameID);
+
+                if (pSetLatencyMarkerParams->frameID != frameCount)
+                    State::Instance().currentFG->SetFrameCount(pSetLatencyMarkerParams->frameID);
+
+                State::Instance().reflexFrameId = pSetLatencyMarkerParams->frameID;
+            }
+
+            sl::FrameToken* frameToken;
+            uint32_t frameCount = pSetLatencyMarkerParams->frameID;
+            StreamlineProxy::GetNewFrameToken()(frameToken, &frameCount);
+
+            LOG_TRACE("{} for frame {}", magic_enum::enum_name(marker), frameCount);
+
+            skip[index] = true;
+            StreamlineProxy::PCLSetMarker()(marker, *frameToken);
+            skip[index] = false;
+
+            return NvAPI_Status::NVAPI_OK;
+        }
+        // else
+        //{
+        //     return o_NvAPI_D3D_SetLatencyMarker(pDev, pSetLatencyMarkerParams);
+        // }
+    }
+
     _updatesWithoutMarker = 0;
 
     // LOG_DEBUG("frameID: {}, markerType: {}", pSetLatencyMarkerParams->frameID,

@@ -31,6 +31,7 @@ class ReflexHooks
     inline static NV_SET_SLEEP_MODE_PARAMS _lastSleepParams {};
     inline static IUnknown* _lastSleepDev = nullptr;
     inline static bool _dlssgDetected = false;
+    inline static bool _receivingMarkers = false;
     inline static uint64_t _lastAsyncMarkerFrameId = 0;
     inline static uint64_t _updatesWithoutMarker = 0;
 

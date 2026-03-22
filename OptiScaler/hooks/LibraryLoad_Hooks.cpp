@@ -578,8 +578,8 @@ HMODULE LibraryLoadHooks::LoadNvApi()
             LOG_WARN("nvapi64.dll is loaded when Nvidia is not the primary GPU");
     }
 
-    if (nvapi == nullptr)
-        nvapi = GetModuleHandleW(L"nvapi64.dll");
+    // if (nvapi == nullptr)
+    //     nvapi = GetModuleHandleW(L"nvapi64.dll");
 
     // Try to load nvapi only from system32, like the original call would
     if (nvapi == nullptr)

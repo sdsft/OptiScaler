@@ -167,10 +167,12 @@ class StreamlineHooks
     static PFN_slSetConstants_sl1 o_reflex_slSetConstants_sl1;
     static PFN_slOnPluginLoad o_reflex_slOnPluginLoad;
     static decltype(&slReflexSetOptions) o_slReflexSetOptions;
+    static decltype(&slReflexSleep) o_slReflexSleep;
 
     static bool hkreflex_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
                                         const char** pluginJSON);
     static sl::Result hkslReflexSetOptions(const sl::ReflexOptions& options);
+    static sl::Result hkslReflexSleep(const sl::FrameToken& frame);
     static bool hkreflex_slSetConstants_sl1(const void* data, uint32_t frameIndex, uint32_t id);
     static void* hkreflex_slGetPluginFunction(const char* functionName);
 

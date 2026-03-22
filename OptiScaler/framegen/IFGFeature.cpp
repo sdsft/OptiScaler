@@ -181,7 +181,8 @@ void IFGFeature::SetFrameCount(UINT64 frameId)
 {
     // Only increment frame count, if it's higher than current one
     // Also take allowed frame ahead into account to prevent wrong frame count
-    if (frameId > _frameCount && (frameId - _frameCount) > Config::Instance()->FGAllowedFrameAhead.value_or_default())
+    // if (frameId > _frameCount && (frameId - _frameCount) >
+    // Config::Instance()->FGAllowedFrameAhead.value_or_default())
     {
         LOG_DEBUG("Old: {}, New: {}", _frameCount, frameId);
         _frameCount = frameId;

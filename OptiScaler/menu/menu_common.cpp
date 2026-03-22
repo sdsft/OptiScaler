@@ -2946,9 +2946,7 @@ bool MenuCommon::RenderMenu()
 
                 // DLSSG output requirements
                 auto constexpr dlssgOutputIndex = (uint32_t) FGOutput::DLSSG;
-
-                if (!StreamlineProxy::IsD3D12Inited())
-                    outputOptions[dlssgOutputIndex].set_disabled(true, "Streamline is not inited!");
+                outputOptions[dlssgOutputIndex].set_disabled(state.swapchainApi != API::DX12, "Unsupported API");
 
                 // Nukem's FG mod requirements
                 auto constexpr nukemsInputIndex = (uint32_t) FGInput::Nukems;
@@ -3724,6 +3722,15 @@ bool MenuCommon::RenderMenu()
 
                             ShowHelpMarker("Set DLSSG interpolation count");
                         }
+
+                        bool useGamesMarkers = config->FGDLSSGUseGamesReflexMarkers.value_or_default();
+                        ImGui::BeginDisabled(!ReflexHooks::isReflexHooked());
+                        if (ImGui::Checkbox("Use Game's Reflex Markers", &useGamesMarkers))
+                        {
+                            config->FGDLSSGUseGamesReflexMarkers = useGamesMarkers;
+                            LOG_DEBUG("Changed set FGDLSSGUseGamesReflexMarkers: {}", useGamesMarkers);
+                        }
+                        ImGui::EndDisabled();
                     }
                 }
 

@@ -203,6 +203,8 @@ bool Config::Reload(std::filesystem::path iniPath)
             if (FGDLSSGInterpolationCount.has_value() &&
                 (FGDLSSGInterpolationCount.value() < 1 || FGDLSSGInterpolationCount.value() > 6))
                 FGDLSSGInterpolationCount.reset();
+
+            FGDLSSGUseGamesReflexMarkers.set_from_config(readBool("DLSSG", "UseGamesReflexMarkers"));
         }
 
         // FSR FG Inputs
@@ -884,6 +886,8 @@ bool Config::SaveIni()
     {
         ini.SetValue("DLSSG", "InterpolationCount",
                      GetIntValue(Instance()->FGDLSSGInterpolationCount.value_for_config()).c_str());
+        ini.SetValue("DLSSG", "UseGamesReflexMarkers",
+                     GetBoolValue(Instance()->FGDLSSGUseGamesReflexMarkers.value_for_config()).c_str());
     }
 
     // OptiFG

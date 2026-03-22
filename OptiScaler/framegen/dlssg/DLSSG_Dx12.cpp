@@ -265,11 +265,8 @@ void DLSSG_Dx12::Activate()
 
     if (!_isActive)
     {
-        sl::DLSSGOptions options {};
-        options.mode = sl::DLSSGMode::eOn;
-        options.queueParallelismMode = sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue;
-        StreamlineProxy::DLSSGSetOptions()(viewport, options);
 
+        UpdateTarget();
         _isActive = true;
     }
 }
@@ -341,23 +338,14 @@ bool DLSSG_Dx12::Dispatch()
         LOG_INFO("Interpolation count changed {} -> {}", _framesToInterpolate,
                  Config::Instance()->FGDLSSGInterpolationCount.value_or_default());
 
-        sl::DLSSGOptions dlssgOptions {};
-        dlssgOptions.mode = sl::DLSSGMode::eOn;
-        dlssgOptions.numFramesToGenerate = Config::Instance()->FGDLSSGInterpolationCount.value_or_default();
-
-        auto optionResult = StreamlineProxy::DLSSGSetOptions()(viewport, dlssgOptions);
-
-        if (optionResult != sl::Result::eOk)
-        {
-            LOG_ERROR("DLSSGSetOptions error: {} ({})", magic_enum::enum_name(optionResult), (UINT) optionResult);
-        }
-        else
-        {
-            LOG_DEBUG("Interpolation count set to: {}",
-                      Config::Instance()->FGDLSSGInterpolationCount.value_or_default());
-            _framesToInterpolate = Config::Instance()->FGDLSSGInterpolationCount.value_or_default();
-        }
+        _framesToInterpolate = Config::Instance()->FGDLSSGInterpolationCount.value_or_default();
     }
+
+    sl::DLSSGOptions options {};
+    options.mode = sl::DLSSGMode::eOn;
+    options.numFramesToGenerate = _framesToInterpolate;
+    options.queueParallelismMode = sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue;
+    StreamlineProxy::DLSSGSetOptions()(viewport, options);
 
     if (!_haveHudless.has_value())
     {
