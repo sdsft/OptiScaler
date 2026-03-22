@@ -154,7 +154,9 @@ void NvApiHooks::Hook(HMODULE nvapiModule)
     if (o_NvAPI_QueryInterface != nullptr)
     {
         LOG_INFO("NvAPI_QueryInterface found, hooking!");
-        fakenvapi::init();
+
+        if (fakenvapi::isUsingAsMainNvapi())
+            fakenvapi::init();
 
         DetourTransactionBegin();
         DetourUpdateThread(GetCurrentThread());

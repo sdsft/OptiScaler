@@ -858,14 +858,11 @@ static void CheckWorkingMode()
     }
 
     // NVAPI
-    HMODULE nvapi64 = nullptr;
-    nvapi64 = GetDllNameWModule(&nvapiNamesW);
-    if (nvapi64 != nullptr)
+    // Doesn't seem to like GetModuleHandle for some reason, so call our load to make sure
+    if (GetDllNameWModule(&nvapiNamesW) != nullptr)
     {
-        LOG_DEBUG("nvapi64.dll already in memory");
-
-        // if (!isWorkingWithEnabler)
-        NvApiHooks::Hook(nvapi64);
+        // This hooks nvapi as well when possible
+        auto nvapi64 = LibraryLoadHooks::LoadNvApi();
     }
 
     // GDI32
@@ -1614,14 +1611,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         auto isNvidiaViaNvapi = [&]()
         {
             bool nvidiaDetected = false;
-            bool loadedHere = false;
-            auto nvapiModule = GetDllNameWModule(&nvapiNamesW);
 
-            if (!nvapiModule)
-            {
-                nvapiModule = NtdllProxy::LoadLibraryExW_Ldr(L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
-                loadedHere = true;
-            }
+            // Only try to load the real nvapi which is located in system32
+            auto nvapiModule = NtdllProxy::LoadLibraryExW_Ldr(L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
 
             // No nvapi, should not be nvidia
             if (!nvapiModule)
@@ -1674,8 +1666,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
                 }
             }
 
-            if (loadedHere)
-                NtdllProxy::FreeLibrary_Ldr(nvapiModule);
+            NtdllProxy::FreeLibrary_Ldr(nvapiModule);
 
             spdlog::debug("Nvidia detected: {}", nvidiaDetected);
 

@@ -298,14 +298,7 @@ std::vector<GpuInformation> IdentifyGpu::checkGpuInfoVulkan()
 
 void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
 {
-    bool loadedHere = false;
-    auto nvapiModule = KernelBaseProxy::GetModuleHandleW_()(L"nvapi64.dll");
-
-    if (!nvapiModule)
-    {
-        nvapiModule = NtdllProxy::LoadLibraryExW_Ldr(L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        loadedHere = true;
-    }
+    auto nvapiModule = NtdllProxy::LoadLibraryExW_Ldr(L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
 
     // No nvapi, should not be nvidia, possibly external spoofing
     if (!nvapiModule)
@@ -315,7 +308,7 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
             (PFN_NvApi_QueryInterface) KernelBaseProxy::GetProcAddress_()(nvapiModule, "nvapi_QueryInterface"))
     {
         // Check for fakenvapi in system32, assume it's not nvidia if found
-        if (o_NvAPI_QueryInterface(GET_ID(Fake_InformFGState)))
+        if (o_NvAPI_QueryInterface(0x21382138))
             return;
 
         // Handle we want to grab
@@ -371,8 +364,7 @@ void IdentifyGpu::queryNvapi(GpuInformation& gpuInfo)
         }
     }
 
-    if (loadedHere)
-        NtdllProxy::FreeLibrary_Ldr(nvapiModule);
+    NtdllProxy::FreeLibrary_Ldr(nvapiModule);
 
     // assumes GTX16xx to be capable due to our spoofing
     if (Config::Instance()->DLSSEnabled.value_or_default())
