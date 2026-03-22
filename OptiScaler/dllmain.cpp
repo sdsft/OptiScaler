@@ -994,7 +994,7 @@ static void CheckWorkingMode()
     if (ffxDx12DenoiserModule != nullptr)
     {
         LOG_DEBUG("amd_fidelityfx_denoiser_dx12.dll already in memory");
-        FfxApiProxy::InitFfxDx12_Denoiser(ffxDx12FGModule);
+        FfxApiProxy::InitFfxDx12_Denoiser(ffxDx12DenoiserModule);
     }
 
     // FFX Vulkan
