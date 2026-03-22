@@ -3724,7 +3724,7 @@ bool MenuCommon::RenderMenu()
                         }
 
                         bool useGamesMarkers = config->FGDLSSGUseGamesReflexMarkers.value_or_default();
-                        ImGui::BeginDisabled(!ReflexHooks::isReflexHooked());
+                        ImGui::BeginDisabled(!ReflexHooks::gameIsSendingMarkers());
                         if (ImGui::Checkbox("Use Game's Reflex Markers", &useGamesMarkers))
                         {
                             config->FGDLSSGUseGamesReflexMarkers = useGamesMarkers;

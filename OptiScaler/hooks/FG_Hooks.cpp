@@ -1079,10 +1079,12 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
     {
         ((IDXGISwapChain4*) This)->GetCurrentBackBufferIndex();
 
-        if (!ReflexHooks::isReflexHooked() || !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
+        const uint32_t frameId = State::Instance().currentFG->FrameCount();
+        auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
+
+        if (!ReflexHooks::gameIsSendingMarkers() ||
+            !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
         {
-            const uint32_t frameId = State::Instance().currentFG->FrameCount();
-            auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
             StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentStart, *frameToken);
         }
     }
@@ -1148,13 +1150,11 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
         result = o_FGSCPresent1((IDXGISwapChain1*) This, SyncInterval, Flags, pPresentParameters);
     LOG_DEBUG("Result: {:X}", result);
 
-    if ((!ReflexHooks::isReflexHooked() || !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default()) &&
-        willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG)
+    if ((!ReflexHooks::gameIsSendingMarkers() ||
+         !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default()) &&
+        willPresent && State::Instance().activeFgOutput == FGOutput::DLSSG && frameToken != nullptr)
     {
-        const uint32_t frameId = State::Instance().currentFG->FrameCount();
-        auto tokenResult = StreamlineProxy::GetNewFrameToken()(frameToken, &frameId);
         StreamlineProxy::PCLSetMarker()(sl::PCLMarker::ePresentEnd, *frameToken);
-
         StreamlineProxy::ReflexSleep()(*frameToken);
     }
 

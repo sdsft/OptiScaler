@@ -6,6 +6,8 @@
 #include <menu/menu_overlay_dx.h>
 #include <resource_tracking/ResTrack_dx12.h>
 
+#include <hooks/Reflex_Hooks.h>
+
 #include <magic_enum.hpp>
 
 #include <DirectXMath.h>
@@ -282,6 +284,12 @@ void DLSSG_Dx12::Deactivate()
         options.queueParallelismMode = sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue;
         StreamlineProxy::DLSSGSetOptions()(viewport, options);
 
+        sl::ReflexOptions reflexConst = {};
+        reflexConst.mode = sl::ReflexMode::eOff;
+        reflexConst.useMarkersToOptimize = false;
+
+        StreamlineProxy::ReflexSetOptions()(reflexConst);
+
         _isActive = false;
     }
 }
@@ -297,6 +305,9 @@ bool DLSSG_Dx12::Shutdown()
     MenuOverlayDx::CleanupRenderTarget(true, NULL);
 
     DestroyFGContext();
+
+    if (State::Instance().isShuttingDown)
+        StreamlineProxy::Shutdown()();
 
     return true;
 }
@@ -346,6 +357,12 @@ bool DLSSG_Dx12::Dispatch()
     options.numFramesToGenerate = _framesToInterpolate;
     options.queueParallelismMode = sl::DLSSGQueueParallelismMode::eBlockPresentingClientQueue;
     StreamlineProxy::DLSSGSetOptions()(viewport, options);
+
+    sl::ReflexOptions reflexConst = {};
+    reflexConst.mode = sl::ReflexMode::eLowLatency;
+    reflexConst.useMarkersToOptimize = ReflexHooks::gameIsSendingMarkers();
+
+    StreamlineProxy::ReflexSetOptions()(reflexConst);
 
     if (!_haveHudless.has_value())
     {

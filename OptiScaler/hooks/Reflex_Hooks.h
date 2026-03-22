@@ -35,6 +35,8 @@ class ReflexHooks
     inline static uint64_t _lastAsyncMarkerFrameId = 0;
     inline static uint64_t _updatesWithoutMarker = 0;
 
+    inline static uint64_t _lastMarkerFrame = 0;
+
     inline static NV_VULKAN_SET_SLEEP_MODE_PARAMS _lastVkSleepParams {};
     inline static HANDLE _lastVkSleepDev = nullptr;
 
@@ -80,6 +82,7 @@ class ReflexHooks
     static bool isReflexHooked();
     static void* getHookedReflex(unsigned int InterfaceId);
     static bool updateTimingData();
+    static bool gameIsSendingMarkers();
 
     // For updating information about Reflex hooks
     static void update(bool optiFg_FgState, bool isVulkan);

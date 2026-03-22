@@ -9,6 +9,10 @@
 #include <magic_enum.hpp>
 #include <nvapi/fakenvapi/nvapi_calls.h>
 
+#include <math.h>
+
+static inline uint64_t _lastPresentId = 0;
+
 // #define LOG_REFLEX_CALLS
 
 #define CALL_XEFG_NVAPI(FuncName, ...)                                                                                 \
@@ -63,7 +67,7 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_Sleep(IUnknown* pDev)
         if (!skip)
         {
             sl::FrameToken* frameToken;
-            uint32_t frameCount = State::Instance().currentFG->FrameCount();
+            uint32_t frameCount = _lastPresentId;
             StreamlineProxy::GetNewFrameToken()(frameToken, &frameCount);
 
             LOG_TRACE("Sleep for frame {}", frameCount);
@@ -103,7 +107,27 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_SetLatencyMarker(IUnknown* pDev,
     LOG_FUNC();
 #endif
 
+    _updatesWithoutMarker = 0;
+
+    // LOG_DEBUG("frameID: {}, markerType: {}", pSetLatencyMarkerParams->frameID,
+    //           magic_enum::enum_name(pSetLatencyMarkerParams->markerType));
+
+    // Some games just stop sending any async markers when DLSSG is disabled, so a reset is needed
+    if (_lastAsyncMarkerFrameId + 10 < pSetLatencyMarkerParams->frameID)
+        _dlssgDetected = false;
+
+    State::Instance().rtssReflexInjection = pSetLatencyMarkerParams->frameID >> 32;
+
+    // TODO: reflexFrameId gets constantly changed, up and down depending on the marker
+    State::Instance().reflexFrameId = pSetLatencyMarkerParams->frameID;
+
+    if (pSetLatencyMarkerParams->markerType == PRESENT_END)
+        _lastPresentId = pSetLatencyMarkerParams->frameID;
+
     static bool skip[20] = {};
+
+    if (pSetLatencyMarkerParams->markerType == SIMULATION_START)
+        _lastMarkerFrame = State::Instance().FGLastFrame;
 
     if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
         Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
@@ -134,6 +158,7 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_SetLatencyMarker(IUnknown* pDev,
             break;
 
         case PRESENT_END:
+            _lastPresentId = pSetLatencyMarkerParams->frameID;
             marker = sl::PCLMarker::ePresentEnd;
             break;
 
@@ -197,25 +222,11 @@ NvAPI_Status ReflexHooks::hkNvAPI_D3D_SetLatencyMarker(IUnknown* pDev,
 
             return NvAPI_Status::NVAPI_OK;
         }
-        // else
-        //{
-        //     return o_NvAPI_D3D_SetLatencyMarker(pDev, pSetLatencyMarkerParams);
-        // }
+        else
+        {
+            return o_NvAPI_D3D_SetLatencyMarker(pDev, pSetLatencyMarkerParams);
+        }
     }
-
-    _updatesWithoutMarker = 0;
-
-    // LOG_DEBUG("frameID: {}, markerType: {}", pSetLatencyMarkerParams->frameID,
-    //           magic_enum::enum_name(pSetLatencyMarkerParams->markerType));
-
-    // Some games just stop sending any async markers when DLSSG is disabled, so a reset is needed
-    if (_lastAsyncMarkerFrameId + 10 < pSetLatencyMarkerParams->frameID)
-        _dlssgDetected = false;
-
-    State::Instance().rtssReflexInjection = pSetLatencyMarkerParams->frameID >> 32;
-
-    // TODO: reflexFrameId gets constantly changed, up and down depending on the marker
-    State::Instance().reflexFrameId = pSetLatencyMarkerParams->frameID;
 
     if (State::Instance().gameQuirks & GameQuirk::HitmanReflexHacks)
     {
@@ -477,6 +488,12 @@ bool ReflexHooks::updateTimingData()
     return true;
 }
 
+bool ReflexHooks::gameIsSendingMarkers()
+{
+    return _lastMarkerFrame != 0 && ((State::Instance().FGLastFrame < _lastMarkerFrame) ||
+                                     (State::Instance().FGLastFrame - _lastMarkerFrame) < 5);
+}
+
 // For updating information about Reflex hooks
 void ReflexHooks::update(bool optiFg_FgState, bool isVulkan)
 {
@@ -501,11 +518,12 @@ void ReflexHooks::update(bool optiFg_FgState, bool isVulkan)
     else
     {
         // Don't use when: Real Reflex markers + OptiFG + Reflex disabled, causes huge input latency
-        State::Instance().reflexLimitsFps =
-            fakenvapi::isUsingAsMainNvapi() || !optiFg_FgState || _lastSleepParams.bLowLatencyMode;
-        State::Instance().reflexShowWarning = State::Instance().activeFgOutput != FGOutput::XeFG &&
-                                              !fakenvapi::isUsingAsMainNvapi() && optiFg_FgState &&
-                                              _lastSleepParams.bLowLatencyMode;
+        State::Instance().reflexLimitsFps = fakenvapi::isUsingAsMainNvapi() || !optiFg_FgState ||
+                                            _lastSleepParams.bLowLatencyMode ||
+                                            State::Instance().activeFgOutput == FGOutput::DLSSG;
+        State::Instance().reflexShowWarning =
+            State::Instance().activeFgOutput != FGOutput::XeFG && State::Instance().activeFgOutput != FGOutput::DLSSG &&
+            !fakenvapi::isUsingAsMainNvapi() && optiFg_FgState && _lastSleepParams.bLowLatencyMode;
     }
 
     // Disable reflex fps limiting when reflex is force disabled

@@ -295,19 +295,21 @@ class StreamlineProxy
         auto exePath = Util::ExePath().remove_filename();
         auto nvngxDlssPath = Util::FindFilePath(exePath, "nvngx_dlss.dll");
         auto nvngxDlssDPath = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
+        exePath = exePath / L"Opti_DLLs";
         auto nvngxDlssGPath = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
 
         std::vector<std::wstring> pathStorage;
 
         pathStorage.push_back(exePath.wstring());
+
+        if (nvngxDlssGPath.has_value())
+            pathStorage.push_back(nvngxDlssGPath.value().parent_path().wstring());
+
         if (nvngxDlssPath.has_value())
             pathStorage.push_back(nvngxDlssPath.value().parent_path().wstring());
 
         if (nvngxDlssDPath.has_value())
             pathStorage.push_back(nvngxDlssDPath.value().parent_path().wstring());
-
-        if (nvngxDlssGPath.has_value())
-            pathStorage.push_back(nvngxDlssGPath.value().parent_path().wstring());
 
         if (Config::Instance()->DLSSFeaturePath.has_value())
             pathStorage.push_back(Config::Instance()->DLSSFeaturePath.value());
@@ -345,7 +347,7 @@ class StreamlineProxy
             if (result == sl::Result::eOk)
             {
                 auto reflexConst = sl::ReflexOptions {};
-                reflexConst.mode = sl::ReflexMode::eLowLatency;
+                reflexConst.mode = sl::ReflexMode::eOff;
                 reflexConst.useMarkersToOptimize = false;
 
                 result = _slReflexSetOptions(reflexConst);

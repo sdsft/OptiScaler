@@ -759,8 +759,11 @@ sl::Result StreamlineHooks::hkslReflexSetOptions(const sl::ReflexOptions& option
 
 sl::Result StreamlineHooks::hkslReflexSleep(const sl::FrameToken& frame)
 {
-    // if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited())
+    // if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
+    //     Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
+    //{
     //     return StreamlineProxy::ReflexSleep()(frame);
+    // }
 
     return o_slReflexSleep(frame);
 }
@@ -876,6 +879,12 @@ void* StreamlineHooks::hkreflex_slGetPluginFunction(const char* functionName)
 
 sl::Result StreamlineHooks::hkslPCLSetMarker(sl::PCLMarker marker, const sl::FrameToken& frame)
 {
+    // if (State::Instance().activeFgOutput == FGOutput::DLSSG && StreamlineProxy::IsD3D12Inited() &&
+    //     Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default())
+    //{
+    //     return StreamlineProxy::PCLSetMarker()(marker, frame);
+    // }
+
     // HACK for broken games
     static uint64_t last_simulation_end_id = 0;
     if (marker == sl::PCLMarker::eSimulationEnd)
