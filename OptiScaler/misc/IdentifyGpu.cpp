@@ -415,8 +415,16 @@ void IdentifyGpu::getHardwareAdapter(IDXGIFactory* InFactory, IDXGIAdapter** InA
 
 std::vector<GpuInformation> IdentifyGpu::getAllGpus()
 {
+    // Prevent getAllGpus calling itself
+    thread_local bool skip = false;
+    if (skip)
+        return std::vector<GpuInformation> {};
+
     // Static inits are thread safe
+    skip = true;
     static std::vector<GpuInformation> cache = []() { return checkGpuInfo(); }();
+    skip = false;
+
     return cache;
 }
 
@@ -429,14 +437,22 @@ GpuInformation IdentifyGpu::getPrimaryGpu()
 // !!! Use the Vulkan variants only inside DLL_PROCESS_ATTACH as they provide incomplete data !!!
 std::vector<GpuInformation> IdentifyGpu::getAllGpusVulkan()
 {
+    // Prevent getAllGpusVulkan calling itself
+    thread_local bool skip = false;
+    if (skip)
+        return std::vector<GpuInformation> {};
+
+    // Static inits are thread safe
+    skip = true;
     static std::vector<GpuInformation> cache = []() { return checkGpuInfoVulkan(); }();
+    skip = false;
+
     return cache;
 }
 
 // !!! Use the Vulkan variants only inside DLL_PROCESS_ATTACH as they provide incomplete data !!!
 GpuInformation IdentifyGpu::getPrimaryGpuVulkan()
 {
-    // return GpuInformation {};
     auto allGpus = getAllGpusVulkan();
     return allGpus.size() > 0 ? allGpus[0] : GpuInformation {};
 }
