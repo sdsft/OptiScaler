@@ -360,6 +360,15 @@ NvAPI_Status ReflexHooks::hkNvAPI_Vulkan_SetSleepMode(HANDLE vkDevice,
     return o_NvAPI_Vulkan_SetSleepMode(vkDevice, pSetSleepModeParams);
 }
 
+NvAPI_Status ReflexHooks::hkNvAPI_Vulkan_GetLatency(HANDLE vkDevice, NV_VULKAN_LATENCY_RESULT_PARAMS* pGetLatencyParams)
+{
+#ifdef LOG_REFLEX_CALLS
+    LOG_FUNC();
+#endif
+
+    return o_NvAPI_Vulkan_GetLatency(vkDevice, pGetLatencyParams);
+}
+
 void ReflexHooks::hookReflex(PFN_NvApi_QueryInterface& queryInterface)
 {
     if (!_inited)
@@ -375,9 +384,11 @@ void ReflexHooks::hookReflex(PFN_NvApi_QueryInterface& queryInterface)
         o_NvAPI_D3D12_SetAsyncFrameMarker = GET_INTERFACE(NvAPI_D3D12_SetAsyncFrameMarker, queryInterface);
         o_NvAPI_Vulkan_SetLatencyMarker = GET_INTERFACE(NvAPI_Vulkan_SetLatencyMarker, queryInterface);
         o_NvAPI_Vulkan_SetSleepMode = GET_INTERFACE(NvAPI_Vulkan_SetSleepMode, queryInterface);
+        o_NvAPI_Vulkan_GetLatency = GET_INTERFACE(NvAPI_Vulkan_GetLatency, queryInterface);
 
         _inited = o_NvAPI_D3D_SetSleepMode && o_NvAPI_D3D_Sleep && o_NvAPI_D3D_GetLatency &&
-                  o_NvAPI_D3D_SetLatencyMarker && o_NvAPI_D3D12_SetAsyncFrameMarker;
+                  o_NvAPI_D3D_SetLatencyMarker && o_NvAPI_D3D12_SetAsyncFrameMarker &&
+                  o_NvAPI_Vulkan_SetLatencyMarker && o_NvAPI_Vulkan_SetSleepMode && o_NvAPI_Vulkan_GetLatency;
 
         if (_inited)
             LOG_DEBUG("Inited Reflex hooks");
@@ -420,6 +431,10 @@ void* ReflexHooks::getHookedReflex(unsigned int InterfaceId)
     {
         return &hkNvAPI_Vulkan_SetSleepMode;
     }
+    if (InterfaceId == GET_ID(NvAPI_Vulkan_GetLatency) && o_NvAPI_Vulkan_GetLatency)
+    {
+        return &hkNvAPI_Vulkan_GetLatency;
+    }
 
     return nullptr;
 }
@@ -440,52 +455,72 @@ bool ReflexHooks::updateTimingData()
 {
     bool canCall = ((State::Instance().activeFgOutput == FGOutput::XeFG && !fakenvapi::isUsingAsMainNvapi() &&
                      !Config::Instance()->XeFGWithoutXeLL.value_or_default()) ||
-                    o_NvAPI_D3D_GetLatency);
+                    o_NvAPI_D3D_GetLatency || o_NvAPI_Vulkan_GetLatency);
 
-    if (!canCall || !_lastSleepDev)
+    if (!canCall)
         return false;
 
-    NV_LATENCY_RESULT_PARAMS results {};
-    results.version = NV_LATENCY_RESULT_PARAMS_VER;
-
-    if (auto result = hkNvAPI_D3D_GetLatency(_lastSleepDev, &results); result != NVAPI_OK)
-        return false;
-
-    // 64th element have the latest data
-    auto& frameReport = results.frameReport[63];
-
-    uint64_t start = UINT64_MAX;
-    uint64_t end = 0;
-
-    // Please don't look, just thought it would be least work
-    auto pTimes = (uint64_t*) &frameReport.simStartTime;
-    for (auto i = 0; i < 11; i++)
+    auto processFrameReport = [&](const auto& frameReport) -> bool
     {
-        auto& time = pTimes[i];
-        if (time == 0)
-            continue;
+        uint64_t start = UINT64_MAX;
+        uint64_t end = 0;
 
-        if (time < start)
-            start = time;
+        // Please don't look, just thought it would be least work
+        auto pTimes = (const uint64_t*) &frameReport.simStartTime;
+        for (auto i = 0; i < 11; i++)
+        {
+            auto& time = pTimes[i];
+            if (time == 0)
+                continue;
 
-        if (time > end)
-            end = time;
+            if (time < start)
+                start = time;
+
+            if (time > end)
+                end = time;
+        }
+
+        if (end < start)
+            return false;
+
+        double rangeNs = static_cast<double>(end - start);
+
+        timingData[TimingType::TimeRange] = TimingEntry { .position = 0, .length = rangeNs };
+        UPDATE_TIMING_ENTRY(sim, Simulation)
+        UPDATE_TIMING_ENTRY(renderSubmit, RenderSubmit)
+        UPDATE_TIMING_ENTRY(present, Present)
+        UPDATE_TIMING_ENTRY(driver, Driver)
+        UPDATE_TIMING_ENTRY(osRenderQueue, OsRenderQueue)
+        UPDATE_TIMING_ENTRY(gpuRender, GpuRender)
+
+        return true;
+    };
+
+    if (_lastSleepDev && o_NvAPI_D3D_GetLatency)
+    {
+        // Not calling free on this but it's static so hopefully fine
+        static NV_LATENCY_RESULT_PARAMS* results = new NV_LATENCY_RESULT_PARAMS(NV_LATENCY_RESULT_PARAMS_VER);
+
+        if (auto result = hkNvAPI_D3D_GetLatency(_lastSleepDev, results); result != NVAPI_OK)
+            return false;
+
+        // 64th element has the latest data
+        return processFrameReport(results->frameReport[63]);
+    }
+    else if (_lastVkSleepDev && o_NvAPI_Vulkan_GetLatency)
+    {
+        // Not calling free on this but it's static so hopefully fine
+        static NV_VULKAN_LATENCY_RESULT_PARAMS* results =
+            new NV_VULKAN_LATENCY_RESULT_PARAMS(NV_VULKAN_LATENCY_RESULT_PARAMS_VER);
+
+        if (auto result = hkNvAPI_Vulkan_GetLatency(_lastVkSleepDev, results); result != NVAPI_OK)
+            return false;
+
+        // 64th element has the latest data
+        return processFrameReport(results->frameReport[63]);
     }
 
-    if (end < start)
-        return false;
-
-    double rangeNs = static_cast<double>(end - start);
-
-    timingData[TimingType::TimeRange] = TimingEntry { .position = 0, .length = rangeNs };
-    UPDATE_TIMING_ENTRY(sim, Simulation)
-    UPDATE_TIMING_ENTRY(renderSubmit, RenderSubmit)
-    UPDATE_TIMING_ENTRY(present, Present)
-    UPDATE_TIMING_ENTRY(driver, Driver)
-    UPDATE_TIMING_ENTRY(osRenderQueue, OsRenderQueue)
-    UPDATE_TIMING_ENTRY(gpuRender, GpuRender)
-
-    return true;
+    return false;
 }
 
 bool ReflexHooks::gameIsSendingMarkers()
