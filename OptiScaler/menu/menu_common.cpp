@@ -126,6 +126,10 @@ static std::vector<std::string> splashText = { "Cope smarter, not harder",
                                                "Fake it til you bake it",
                                                "Worst case just turn it off and on",
                                                "*On a generative damage control mode at geometry level*",
+                                               "Deep Learning Slop Sampling 5",
+                                               "2D AI filters, now powered by just 2x 5090s",
+                                               "Neural Slop Sampling with DLSS5",
+                                               "DLSS 5 - the way it's meant to be slopped",
                                                "<Your funny text goes here>" };
 
 static std::string updateNoticeTag;
