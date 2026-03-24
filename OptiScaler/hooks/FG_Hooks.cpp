@@ -1147,8 +1147,17 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
     if (pPresentParameters == nullptr)
         result = o_FGSCPresent(This, SyncInterval, Flags);
     else
-        result = o_FGSCPresent1((IDXGISwapChain1*) This, SyncInterval, Flags, pPresentParameters);
-    LOG_DEBUG("Result: {:X}", result);
+        result = o_FGSCPresent1(This, SyncInterval, Flags, pPresentParameters);
+
+    if (result == S_OK)
+    {
+        LOG_DEBUG("Result: {:X}", result);
+    }
+    else
+    {
+        if (result == DXGI_ERROR_DEVICE_REMOVED && State::Instance().currentD3D12Device != nullptr)
+            Util::GetDeviceRemovedReason(State::Instance().currentD3D12Device);
+    }
 
     if ((!ReflexHooks::gameIsSendingMarkers() ||
          !Config::Instance()->FGDLSSGUseGamesReflexMarkers.value_or_default()) &&
