@@ -211,7 +211,7 @@ void FSR4ModelSelection::Hook(HMODULE module, FSR4Source source)
 
         if (!o_createModelDriver)
         {
-            // From amdxcffx64 2.1.0.968
+            // From amdxcffx64 2.1.0.968/2.2.0.1328
             const char* pattern = "48 8B C4 48 89 58 ? 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 ? ? ? ? 48 81 EC ? ? "
                                   "? ? 0F 29 70 ? 0F 29 78 ? 48 8B 05";
             o_createModelDriver = (PFN_createModel) scanner::GetAddress(module, pattern);
