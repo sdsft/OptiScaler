@@ -1020,8 +1020,8 @@ class FfxApiProxy
     {
         auto type = GetType(desc->type);
 
-        if (type == FFXStructType::General && contextToType.contains(context))
-            type = contextToType[context];
+        if (type == FFXStructType::General && contextToType.contains(*context))
+            type = contextToType[*context];
 
         auto isFg = type == FFXStructType::FG || type == FFXStructType::SwapchainDX12;
 

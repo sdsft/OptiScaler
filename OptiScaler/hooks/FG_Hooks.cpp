@@ -1147,7 +1147,7 @@ HRESULT FGHooks::FGPresent(IDXGISwapChain* This, UINT SyncInterval, UINT Flags,
     if (pPresentParameters == nullptr)
         result = o_FGSCPresent(This, SyncInterval, Flags);
     else
-        result = o_FGSCPresent1(This, SyncInterval, Flags, pPresentParameters);
+        result = o_FGSCPresent1((IDXGISwapChain1*) This, SyncInterval, Flags, pPresentParameters);
 
     if (result == S_OK)
     {
