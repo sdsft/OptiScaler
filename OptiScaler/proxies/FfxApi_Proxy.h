@@ -80,7 +80,7 @@ class FfxApiProxy
 
     inline static FfxModule main_vk;
 
-    inline static ankerl::unordered_dense::map<ffxContext*, FFXStructType> contextToType;
+    inline static ankerl::unordered_dense::map<ffxContext, FFXStructType> contextToType;
 
     inline static bool _skipDestroyCalls = false;
 
@@ -855,27 +855,39 @@ class FfxApiProxy
         auto type = GetType(desc->type);
         auto isFg = type == FFXStructType::FG || type == FFXStructType::SwapchainDX12;
 
-        contextToType[context] = type;
+        ffxReturnCode_t result = FFX_API_RETURN_ERROR;
 
         if (isFg && fg_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with fg_dx12");
-            return fg_dx12.CreateContext(context, desc, memCb);
+            result = fg_dx12.CreateContext(context, desc, memCb);
+            contextToType[*context] = type;
+            LOG_DEBUG("Created with fg_dx12: {:X}", (size_t) *context);
+            return result;
         }
         else if (type == FFXStructType::Upscaling && upscaling_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with upscaling_dx12");
-            return upscaling_dx12.CreateContext(context, desc, memCb);
+            result = upscaling_dx12.CreateContext(context, desc, memCb);
+            contextToType[*context] = type;
+            LOG_DEBUG("Created with upscaling_dx12: {:X}", (size_t) *context);
+            return result;
         }
         else if (type == FFXStructType::Denoiser && denoiser_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with denoiser_dx12");
-            return denoiser_dx12.CreateContext(context, desc, memCb);
+            result = denoiser_dx12.CreateContext(context, desc, memCb);
+            contextToType[*context] = type;
+            LOG_DEBUG("Created with denoiser_dx12: {:X}", (size_t) *context);
+            return result;
         }
         else if (type == FFXStructType::RadianceCache && radiance_dx12.dll != nullptr)
         {
             LOG_DEBUG("Creating with radiance_dx12");
-            return radiance_dx12.CreateContext(context, desc, memCb);
+            result = radiance_dx12.CreateContext(context, desc, memCb);
+            contextToType[*context] = type;
+            LOG_DEBUG("Created with radiance_dx12: {:X}", (size_t) *context);
+            return result;
         }
 
         const auto skipFG = isFg && fg_dx12.skipQueryCalls;
@@ -890,7 +902,7 @@ class FfxApiProxy
             else if (type == FFXStructType::Upscaling)
                 upscaling_dx12.skipCreateCalls = true;
 
-            auto result = main_dx12.CreateContext(context, desc, memCb);
+            result = main_dx12.CreateContext(context, desc, memCb);
 
             if (isFg)
                 fg_dx12.skipCreateCalls = false;
@@ -908,11 +920,11 @@ class FfxApiProxy
         ffxReturnCode_t result = FFX_API_RETURN_ERROR;
         auto type = FFXStructType::Unknown;
 
-        if (contextToType.contains(context))
+        if (contextToType.contains(*context))
         {
-            type = contextToType[context];
+            type = contextToType[*context];
             LOG_DEBUG("Found context type mapping: {}", magic_enum::enum_name(type));
-            contextToType.erase(context);
+            contextToType.erase(*context);
         }
         else
         {
