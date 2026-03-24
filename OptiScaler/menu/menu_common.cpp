@@ -1515,7 +1515,7 @@ bool MenuCommon::RenderMenu()
 
     // New frame check
     if ((!config->DisableSplash.value_or_default() && now > splashStart && now < splashLimit) ||
-        config->ShowFps.value_or_default() || _isVisible)
+        config->ShowFps.value_or_default() || _isVisible || ImGui::notifications.size() > 0)
     {
         if (!_isUWP)
         {
