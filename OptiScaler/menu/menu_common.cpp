@@ -3859,72 +3859,74 @@ bool MenuCommon::RenderMenu()
                         ((state.activeFgOutput == FGOutput::FSRFG && FfxApiProxy::IsFGReady()) ||
                          (state.activeFgOutput == FGOutput::XeFG && XeFGProxy::Module() != nullptr)))
                     {
-                        bool fgHudfix = config->FGHUDFix.value_or_default();
-                        bool disableHudfix = static_cast<bool>(state.gameQuirks & GameQuirk::DisableHudfix);
-
-                        ImGui::BeginDisabled(disableHudfix);
-                        if (ImGui::Checkbox("HUDFix", &fgHudfix))
+                        if (!Config::Instance()->FGDisableHUDFix.value_or_default())
                         {
-                            config->FGHUDFix = fgHudfix;
-                            LOG_DEBUG("Enabled set FGHUDFix: {}", fgHudfix);
-                            state.ClearCapturedHudlesses = true;
-                            state.FGchanged = true;
+                            bool fgHudfix = config->FGHUDFix.value_or_default();
+                            bool disableHudfix = static_cast<bool>(state.gameQuirks & GameQuirk::DisableHudfix);
+
+                            ImGui::BeginDisabled(disableHudfix);
+                            if (ImGui::Checkbox("HUDFix", &fgHudfix))
+                            {
+                                config->FGHUDFix = fgHudfix;
+                                LOG_DEBUG("Enabled set FGHUDFix: {}", fgHudfix);
+                                state.ClearCapturedHudlesses = true;
+                                state.FGchanged = true;
+                            }
+                            ImGui::EndDisabled();
+
+                            if (disableHudfix)
+                                ShowHelpMarker("HUDfix disabled due to known issues");
+                            else
+                                ShowHelpMarker("Enable HUD stability fix, might cause crashes!");
+
+                            ImGui::BeginDisabled(!config->FGHUDFix.value_or_default());
+
+                            ImGui::SameLine(0.0f, 16.0f);
+                            ImGui::PushItemWidth(95.0f * menuResScale);
+                            int hudFixLimit = config->FGHUDLimit.value_or_default();
+                            if (ImGui::InputInt("Limit", &hudFixLimit))
+                            {
+                                if (hudFixLimit < 1)
+                                    hudFixLimit = 1;
+                                else if (hudFixLimit > 999)
+                                    hudFixLimit = 999;
+
+                                config->FGHUDLimit = hudFixLimit;
+                                LOG_DEBUG("Enabled set FGHUDLimit: {}", hudFixLimit);
+                            }
+                            ShowHelpMarker("Delay HUDless capture, high values might cause crash!");
+
+                            ImGui::SameLine(0.0f, 16.0f);
+                            if (ImGui::Button("Res##2"))
+                                _showHudlessWindow = !_showHudlessWindow;
+
+                            ImGui::EndDisabled();
+
+                            auto hudExtended = config->FGHUDFixExtended.value_or_default();
+                            if (ImGui::Checkbox("Extended", &hudExtended))
+                            {
+                                LOG_DEBUG("Enabled set FGHUDFixExtended: {}", hudExtended);
+                                config->FGHUDFixExtended = hudExtended;
+                            }
+                            ShowHelpMarker(
+                                "Extended format checks for possible Hudless\nMight cause crashes and slowdowns!");
+                            ImGui::SameLine(0.0f, 16.0f);
+
+                            ImGui::BeginDisabled(!config->FGHUDFix.value_or_default());
+
+                            auto immediate = config->FGImmediateCapture.value_or_default();
+                            if (ImGui::Checkbox("Immediate Capture", &immediate))
+                            {
+                                LOG_DEBUG("Enabled set FGImmediateCapture: {}", immediate);
+                                config->FGImmediateCapture = immediate;
+                            }
+                            ShowHelpMarker("Enables capturing of resources before shader execution.\nIncrease Hudless "
+                                           "capture chances, but might cause capturing of unnecessary resources.");
+
+                            ImGui::PopItemWidth();
+
+                            ImGui::EndDisabled();
                         }
-                        ImGui::EndDisabled();
-
-                        if (disableHudfix)
-                            ShowHelpMarker("HUDfix disabled due to known issues");
-                        else
-                            ShowHelpMarker("Enable HUD stability fix, might cause crashes!");
-
-                        ImGui::BeginDisabled(!config->FGHUDFix.value_or_default());
-
-                        ImGui::SameLine(0.0f, 16.0f);
-                        ImGui::PushItemWidth(95.0f * menuResScale);
-                        int hudFixLimit = config->FGHUDLimit.value_or_default();
-                        if (ImGui::InputInt("Limit", &hudFixLimit))
-                        {
-                            if (hudFixLimit < 1)
-                                hudFixLimit = 1;
-                            else if (hudFixLimit > 999)
-                                hudFixLimit = 999;
-
-                            config->FGHUDLimit = hudFixLimit;
-                            LOG_DEBUG("Enabled set FGHUDLimit: {}", hudFixLimit);
-                        }
-                        ShowHelpMarker("Delay HUDless capture, high values might cause crash!");
-
-                        ImGui::SameLine(0.0f, 16.0f);
-                        if (ImGui::Button("Res##2"))
-                            _showHudlessWindow = !_showHudlessWindow;
-
-                        ImGui::EndDisabled();
-
-                        auto hudExtended = config->FGHUDFixExtended.value_or_default();
-                        if (ImGui::Checkbox("Extended", &hudExtended))
-                        {
-                            LOG_DEBUG("Enabled set FGHUDFixExtended: {}", hudExtended);
-                            config->FGHUDFixExtended = hudExtended;
-                        }
-                        ShowHelpMarker(
-                            "Extended format checks for possible Hudless\nMight cause crashes and slowdowns!");
-                        ImGui::SameLine(0.0f, 16.0f);
-
-                        ImGui::BeginDisabled(!config->FGHUDFix.value_or_default());
-
-                        auto immediate = config->FGImmediateCapture.value_or_default();
-                        if (ImGui::Checkbox("Immediate Capture", &immediate))
-                        {
-                            LOG_DEBUG("Enabled set FGImmediateCapture: {}", immediate);
-                            config->FGImmediateCapture = immediate;
-                        }
-                        ShowHelpMarker("Enables capturing of resources before shader execution.\nIncrease Hudless "
-                                       "capture chances, but might cause capturing of unnecessary resources.");
-
-                        ImGui::PopItemWidth();
-
-                        ImGui::EndDisabled();
-
                         bool depthScale = config->FGEnableDepthScale.value_or_default();
                         if (ImGui::Checkbox("Scale Depth to fix DLSS RR", &depthScale))
                             config->FGEnableDepthScale = depthScale;
@@ -3947,145 +3949,149 @@ bool MenuCommon::RenderMenu()
                         if (auto ch = ScopedCollapsingHeader("Advanced OptiFG Settings"); ch.IsHeaderOpen())
                         {
                             ScopedIndent indent {};
-                            ImGui::Spacing();
 
-                            auto rb = config->FGResourceBlocking.value_or_default();
-                            if (ImGui::Checkbox("Resource Blocking", &rb))
+                            if (!Config::Instance()->FGDisableHUDFix.value_or_default())
                             {
-                                config->FGResourceBlocking = rb;
-                                LOG_DEBUG("Enabled set FGResourceBlocking: {}", rb);
-                            }
-                            ShowHelpMarker("Block rarely used resources from using as Hudless \n"
-                                           "to prevent flickers and other issues\n\n"
-                                           "HUDfix enable/disable will reset the block list!");
-
-                            ImGui::SameLine(0.0f, 16.0f);
-
-                            auto rrc = config->FGRelaxedResolutionCheck.value_or_default();
-                            if (ImGui::Checkbox("Relaxed Resource Check", &rrc))
-                            {
-                                config->FGRelaxedResolutionCheck = rrc;
-                                LOG_DEBUG("Enabled set FGRelaxedResolutionCheck: {}", rrc);
-                            }
-                            ShowHelpMarker("Relax resolution checks for Hudless by 32 pixels \n"
-                                           "Helps games which use black borders for some \n"
-                                           "resolutions and screen ratios (e.g. Witcher 3)");
-
-                            ImGui::BeginDisabled(state.FGresetCapturedResources);
-                            ImGui::PushItemWidth(95.0f * menuResScale);
-                            if (ImGui::Checkbox("FG Create List", &state.FGcaptureResources))
-                            {
-                                if (!state.FGcaptureResources)
-                                    config->FGHUDLimit = 1;
-                                else
-                                    state.FGonlyUseCapturedResources = false;
-                            }
-
-                            ImGui::SameLine(0.0f, 16.0f);
-                            if (ImGui::Checkbox("FG Use List", &state.FGonlyUseCapturedResources))
-                            {
-                                if (state.FGcaptureResources)
-                                {
-                                    state.FGcaptureResources = false;
-                                    config->FGHUDLimit = 1;
-                                }
-                            }
-
-                            ImGui::SameLine(0.0f, 8.0f);
-                            ImGui::Text("(%d)", state.FGcapturedResourceCount);
-
-                            ImGui::PopItemWidth();
-
-                            ImGui::SameLine(0.0f, 16.0f);
-
-                            if (ImGui::Button("Reset List"))
-                            {
-                                state.FGresetCapturedResources = true;
-                                state.FGonlyUseCapturedResources = false;
-                                state.FGonlyUseCapturedResources = false;
-                            }
-
-                            ImGui::EndDisabled();
-
-                            ImGui::Spacing();
-                            ImGui::Spacing();
-                            if (ImGui::TreeNode("Tracking Settings"))
-                            {
-                                auto ath = config->FGAlwaysTrackHeaps.value_or_default();
-                                if (ImGui::Checkbox("Always Track Heaps", &ath))
-                                {
-                                    config->FGAlwaysTrackHeaps = ath;
-                                    LOG_DEBUG("Enabled set FGAlwaysTrackHeaps: {}", ath);
-                                }
-                                ShowHelpMarker(
-                                    "Always track resources, might cause performance issues\n, but also might "
-                                    "fix HUDFix related crashes!");
-
-                                auto disableRTV = config->FGHudfixDisableRTV.value_or_default();
-                                if (ImGui::Checkbox("Disable RTV Tracking", &disableRTV))
-                                    config->FGHudfixDisableRTV = disableRTV;
-                                ShowHelpMarker("Disable tracking of CreateRenderTargetView\n"
-                                               "This might help filtering of wrong hudless resources");
-
-                                ImGui::SameLine(0.0f, 16.0f);
-
-                                auto disableSRV = config->FGHudfixDisableSRV.value_or_default();
-                                if (ImGui::Checkbox("Disable SRV Tracking", &disableSRV))
-                                    config->FGHudfixDisableSRV = disableSRV;
-                                ShowHelpMarker("Disable tracking of CreateShaderResourceView\n"
-                                               "This might help filtering of wrong Hudless resources");
-
-                                auto disableUAV = config->FGHudfixDisableUAV.value_or_default();
-                                if (ImGui::Checkbox("Disable UAV Tracking", &disableUAV))
-                                    config->FGHudfixDisableUAV = disableUAV;
-                                ShowHelpMarker("Disable tracking of CreateUnorderedAccessView\n"
-                                               "This might help filtering of wrong Hudless resources");
-
-                                ImGui::SameLine(0.0f, 16.0f);
-
-                                auto disableOM = config->FGHudfixDisableOM.value_or_default();
-                                if (ImGui::Checkbox("Disable OM Tracking", &disableOM))
-                                    config->FGHudfixDisableOM = disableOM;
-                                ShowHelpMarker("Disable tracking of OMSetRenderTargets\n"
-                                               "This might help filtering of wrong Hudless resources");
-
-                                auto disableSCR = config->FGHudfixDisableSCR.value_or_default();
-                                if (ImGui::Checkbox("Disable SCR Tracking", &disableSCR))
-                                    config->FGHudfixDisableSCR = disableSCR;
-                                ShowHelpMarker("Disable tracking of SetComputeRootDescriptorTable\n"
-                                               "This might help filtering of wrong Hudless resources");
-
-                                ImGui::SameLine(0.0f, 16.0f);
-
-                                auto disableSGR = config->FGHudfixDisableSGR.value_or_default();
-                                if (ImGui::Checkbox("Disable SGR Tracking", &disableSGR))
-                                    config->FGHudfixDisableSGR = disableSGR;
-                                ShowHelpMarker("Disable tracking of SetGraphicsRootDescriptorTable\n"
-                                               "This might help filtering of wrong Hudless resources");
-
                                 ImGui::Spacing();
 
-                                auto disableDI = config->FGHudfixDisableDI.value_or_default();
-                                if (ImGui::Checkbox("Disable DI Tracking", &disableDI))
-                                    config->FGHudfixDisableDI = disableDI;
-                                ShowHelpMarker("Disable tracking of DrawInstanced\n"
-                                               "This might help filtering of wrong Hudless resources");
+                                auto rb = config->FGResourceBlocking.value_or_default();
+                                if (ImGui::Checkbox("Resource Blocking", &rb))
+                                {
+                                    config->FGResourceBlocking = rb;
+                                    LOG_DEBUG("Enabled set FGResourceBlocking: {}", rb);
+                                }
+                                ShowHelpMarker("Block rarely used resources from using as Hudless \n"
+                                               "to prevent flickers and other issues\n\n"
+                                               "HUDfix enable/disable will reset the block list!");
 
                                 ImGui::SameLine(0.0f, 16.0f);
 
-                                auto disableDII = config->FGHudfixDisableDII.value_or_default();
-                                if (ImGui::Checkbox("Disable DII Tracking", &disableDII))
-                                    config->FGHudfixDisableDII = disableDII;
-                                ShowHelpMarker("Disable tracking of DrawIndexedInstanced\n"
-                                               "This might help filtering of wrong Hudless resources");
+                                auto rrc = config->FGRelaxedResolutionCheck.value_or_default();
+                                if (ImGui::Checkbox("Relaxed Resource Check", &rrc))
+                                {
+                                    config->FGRelaxedResolutionCheck = rrc;
+                                    LOG_DEBUG("Enabled set FGRelaxedResolutionCheck: {}", rrc);
+                                }
+                                ShowHelpMarker("Relax resolution checks for Hudless by 32 pixels \n"
+                                               "Helps games which use black borders for some \n"
+                                               "resolutions and screen ratios (e.g. Witcher 3)");
 
-                                auto disableDispatch = config->FGHudfixDisableDispatch.value_or_default();
-                                if (ImGui::Checkbox("Disable Dispatch Tracking", &disableDispatch))
-                                    config->FGHudfixDisableDispatch = disableDispatch;
-                                ShowHelpMarker("Disable tracking of Dispatch\n"
-                                               "This might help filtering of wrong Hudless resources");
+                                ImGui::BeginDisabled(state.FGresetCapturedResources);
+                                ImGui::PushItemWidth(95.0f * menuResScale);
+                                if (ImGui::Checkbox("FG Create List", &state.FGcaptureResources))
+                                {
+                                    if (!state.FGcaptureResources)
+                                        config->FGHUDLimit = 1;
+                                    else
+                                        state.FGonlyUseCapturedResources = false;
+                                }
 
-                                ImGui::TreePop();
+                                ImGui::SameLine(0.0f, 16.0f);
+                                if (ImGui::Checkbox("FG Use List", &state.FGonlyUseCapturedResources))
+                                {
+                                    if (state.FGcaptureResources)
+                                    {
+                                        state.FGcaptureResources = false;
+                                        config->FGHUDLimit = 1;
+                                    }
+                                }
+
+                                ImGui::SameLine(0.0f, 8.0f);
+                                ImGui::Text("(%d)", state.FGcapturedResourceCount);
+
+                                ImGui::PopItemWidth();
+
+                                ImGui::SameLine(0.0f, 16.0f);
+
+                                if (ImGui::Button("Reset List"))
+                                {
+                                    state.FGresetCapturedResources = true;
+                                    state.FGonlyUseCapturedResources = false;
+                                    state.FGonlyUseCapturedResources = false;
+                                }
+
+                                ImGui::EndDisabled();
+
+                                ImGui::Spacing();
+                                ImGui::Spacing();
+                                if (ImGui::TreeNode("Tracking Settings"))
+                                {
+                                    auto ath = config->FGAlwaysTrackHeaps.value_or_default();
+                                    if (ImGui::Checkbox("Always Track Heaps", &ath))
+                                    {
+                                        config->FGAlwaysTrackHeaps = ath;
+                                        LOG_DEBUG("Enabled set FGAlwaysTrackHeaps: {}", ath);
+                                    }
+                                    ShowHelpMarker(
+                                        "Always track resources, might cause performance issues\n, but also might "
+                                        "fix HUDFix related crashes!");
+
+                                    auto disableRTV = config->FGHudfixDisableRTV.value_or_default();
+                                    if (ImGui::Checkbox("Disable RTV Tracking", &disableRTV))
+                                        config->FGHudfixDisableRTV = disableRTV;
+                                    ShowHelpMarker("Disable tracking of CreateRenderTargetView\n"
+                                                   "This might help filtering of wrong hudless resources");
+
+                                    ImGui::SameLine(0.0f, 16.0f);
+
+                                    auto disableSRV = config->FGHudfixDisableSRV.value_or_default();
+                                    if (ImGui::Checkbox("Disable SRV Tracking", &disableSRV))
+                                        config->FGHudfixDisableSRV = disableSRV;
+                                    ShowHelpMarker("Disable tracking of CreateShaderResourceView\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    auto disableUAV = config->FGHudfixDisableUAV.value_or_default();
+                                    if (ImGui::Checkbox("Disable UAV Tracking", &disableUAV))
+                                        config->FGHudfixDisableUAV = disableUAV;
+                                    ShowHelpMarker("Disable tracking of CreateUnorderedAccessView\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    ImGui::SameLine(0.0f, 16.0f);
+
+                                    auto disableOM = config->FGHudfixDisableOM.value_or_default();
+                                    if (ImGui::Checkbox("Disable OM Tracking", &disableOM))
+                                        config->FGHudfixDisableOM = disableOM;
+                                    ShowHelpMarker("Disable tracking of OMSetRenderTargets\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    auto disableSCR = config->FGHudfixDisableSCR.value_or_default();
+                                    if (ImGui::Checkbox("Disable SCR Tracking", &disableSCR))
+                                        config->FGHudfixDisableSCR = disableSCR;
+                                    ShowHelpMarker("Disable tracking of SetComputeRootDescriptorTable\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    ImGui::SameLine(0.0f, 16.0f);
+
+                                    auto disableSGR = config->FGHudfixDisableSGR.value_or_default();
+                                    if (ImGui::Checkbox("Disable SGR Tracking", &disableSGR))
+                                        config->FGHudfixDisableSGR = disableSGR;
+                                    ShowHelpMarker("Disable tracking of SetGraphicsRootDescriptorTable\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    ImGui::Spacing();
+
+                                    auto disableDI = config->FGHudfixDisableDI.value_or_default();
+                                    if (ImGui::Checkbox("Disable DI Tracking", &disableDI))
+                                        config->FGHudfixDisableDI = disableDI;
+                                    ShowHelpMarker("Disable tracking of DrawInstanced\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    ImGui::SameLine(0.0f, 16.0f);
+
+                                    auto disableDII = config->FGHudfixDisableDII.value_or_default();
+                                    if (ImGui::Checkbox("Disable DII Tracking", &disableDII))
+                                        config->FGHudfixDisableDII = disableDII;
+                                    ShowHelpMarker("Disable tracking of DrawIndexedInstanced\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    auto disableDispatch = config->FGHudfixDisableDispatch.value_or_default();
+                                    if (ImGui::Checkbox("Disable Dispatch Tracking", &disableDispatch))
+                                        config->FGHudfixDisableDispatch = disableDispatch;
+                                    ShowHelpMarker("Disable tracking of Dispatch\n"
+                                                   "This might help filtering of wrong Hudless resources");
+
+                                    ImGui::TreePop();
+                                }
                             }
 
                             ImGui::Spacing();
