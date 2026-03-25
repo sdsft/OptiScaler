@@ -4141,7 +4141,11 @@ bool MenuCommon::RenderMenu()
                             ImGui::TextColored(ImVec4(1.f, 0.f, 0.f, 1.f), "OFF");
                         }
 
-                        if (!State::Instance().NukemsMFG)
+                        // Issue mostly shows up on AMD on Windows on pre-RDNA3 in some non-UE games
+                        // Hide to reduce confusion, config is still read
+                        bool isUnrealEngine = State::Instance().NVNGX_Engine == NVSDK_NGX_ENGINE_TYPE_UNREAL ||
+                                              State::Instance().gameQuirks & GameQuirk::ForceUnrealEngine;
+                        if (!primaryGpu.dlssCapable && !primaryGpu.usesVkd3dProton && !isUnrealEngine)
                         {
                             if (bool makeDepthCopy = config->MakeDepthCopy.value_or_default();
                                 ImGui::Checkbox("Fix broken visuals", &makeDepthCopy))
