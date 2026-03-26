@@ -253,8 +253,11 @@ static Fsr3::FfxErrorCode ffxFsr3ContextCreate_Dx12(Fsr3::FfxFsr3UpscalerContext
         _d3d12Device = state.d3d12Devices[state.d3d12Devices.size() - 1];
 
     if (_d3d12Device == nullptr)
+        _d3d12Device = state.currentD3D12Device;
+
+    if (_d3d12Device == nullptr)
     {
-        LOG_WARN("D3D12 device not found!");
+        LOG_ERROR("D3D12 device not found!");
         return ccResult;
     }
 
@@ -483,8 +486,11 @@ ffxFsr3ContextCreate_Pattern_Dx12(Fsr3::FfxFsr3UpscalerContext* pContext,
         _d3d12Device = state.d3d12Devices[state.d3d12Devices.size() - 1];
 
     if (_d3d12Device == nullptr)
+        _d3d12Device = state.currentD3D12Device;
+
+    if (_d3d12Device == nullptr)
     {
-        LOG_WARN("D3D12 device not found!");
+        LOG_ERROR("D3D12 device not found!");
         return ccResult;
     }
 

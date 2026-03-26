@@ -403,8 +403,11 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Dx12(Fsr212::FfxFsr2Context* co
         _d3d12Device = state.d3d12Devices[state.d3d12Devices.size() - 1];
 
     if (_d3d12Device == nullptr)
+        _d3d12Device = state.currentD3D12Device;
+
+    if (_d3d12Device == nullptr)
     {
-        LOG_WARN("D3D12 device not found!");
+        LOG_ERROR("D3D12 device not found!");
         return ccResult;
     }
 
@@ -518,8 +521,11 @@ static Fsr212::FfxErrorCode ffxFsr2ContextCreate_Pattern_Dx12(Fsr212::FfxFsr2Con
         _d3d12Device = state.d3d12Devices[state.d3d12Devices.size() - 1];
 
     if (_d3d12Device == nullptr)
+        _d3d12Device = state.currentD3D12Device;
+
+    if (_d3d12Device == nullptr)
     {
-        LOG_WARN("D3D12 device not found!");
+        LOG_ERROR("D3D12 device not found!");
         return ccResult;
     }
 
@@ -971,6 +977,11 @@ static float ffxFsr2GetUpscaleRatioFromQualityMode_Dx12(Fsr212::FfxFsr2QualityMo
     LOG_DEBUG("");
 
     auto ratio = GetQualityOverrideRatioFfx(qualityMode).value_or(qualityRatios[(UINT) qualityMode]);
+
+    // FSR 2 didn't have an official Native AA so some games dislike the 1.0 ratio
+    if (ratio == 1.0f)
+        ratio = 1.002f;
+
     LOG_DEBUG("Quality mode: {}, Upscale ratio: {}", (UINT) qualityMode, ratio);
     return ratio;
 }
