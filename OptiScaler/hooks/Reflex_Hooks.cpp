@@ -488,11 +488,7 @@ void* ReflexHooks::getHookedReflex(unsigned int InterfaceId)
 
 bool ReflexHooks::updateTimingData()
 {
-    bool canCall = ((State::Instance().activeFgOutput == FGOutput::XeFG && !fakenvapi::isUsingAsMainNvapi() &&
-                     !Config::Instance()->XeFGWithoutXeLL.value_or_default()) ||
-                    o_NvAPI_D3D_GetLatency || o_NvAPI_Vulkan_GetLatency);
-
-    if (!canCall)
+    if (!_inited)
         return false;
 
     auto processFrameReport = [&](const auto& frameReport) -> bool
@@ -534,10 +530,14 @@ bool ReflexHooks::updateTimingData()
     if (_lastSleepDev && o_NvAPI_D3D_GetLatency)
     {
         // Not calling free on this but it's static so hopefully fine
-        static NV_LATENCY_RESULT_PARAMS* results = new NV_LATENCY_RESULT_PARAMS(NV_LATENCY_RESULT_PARAMS_VER);
+        static NV_LATENCY_RESULT_PARAMS* results = new NV_LATENCY_RESULT_PARAMS();
+        results->version = NV_LATENCY_RESULT_PARAMS_VER;
 
         if (auto result = hkNvAPI_D3D_GetLatency(_lastSleepDev, results); result != NVAPI_OK)
+        {
+            LOG_WARN("NvAPI_D3D_GetLatency failed: {}", magic_enum::enum_name(result));
             return false;
+        }
 
         // 64th element has the latest data
         return processFrameReport(results->frameReport[63]);
@@ -545,11 +545,14 @@ bool ReflexHooks::updateTimingData()
     else if (_lastVkSleepDev && o_NvAPI_Vulkan_GetLatency)
     {
         // Not calling free on this but it's static so hopefully fine
-        static NV_VULKAN_LATENCY_RESULT_PARAMS* results =
-            new NV_VULKAN_LATENCY_RESULT_PARAMS(NV_VULKAN_LATENCY_RESULT_PARAMS_VER);
+        static NV_VULKAN_LATENCY_RESULT_PARAMS* results = new NV_VULKAN_LATENCY_RESULT_PARAMS();
+        results->version = NV_VULKAN_LATENCY_RESULT_PARAMS_VER;
 
         if (auto result = hkNvAPI_Vulkan_GetLatency(_lastVkSleepDev, results); result != NVAPI_OK)
+        {
+            LOG_WARN("NvAPI_Vulkan_GetLatency failed: {}", magic_enum::enum_name(result));
             return false;
+        }
 
         // 64th element has the latest data
         return processFrameReport(results->frameReport[63]);

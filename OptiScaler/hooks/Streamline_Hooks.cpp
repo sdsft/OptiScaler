@@ -192,6 +192,13 @@ sl::Result StreamlineHooks::hkslSetTag(const sl::ViewportHandle& viewport, const
         else if (State::Instance().activeFgInput == FGInput::Nukems)
         {
             LOG_TRACE("Tagging resource of type: {}", tags[i].type);
+
+            // Workaround a bug in the FSR 3 MFG mod where it composits the UI incorrectly
+            if (tags[i].type == sl::kBufferTypeUIColorAndAlpha && tags[i].resource->native &&
+                State::Instance().NukemsMFG)
+            {
+                tags[i].resource->native = nullptr;
+            }
         }
     }
 
