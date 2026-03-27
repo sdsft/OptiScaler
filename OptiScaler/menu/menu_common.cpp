@@ -4726,7 +4726,8 @@ bool MenuCommon::RenderMenu()
                         // if (state.api == DX12 || state.api == DX11)
                         {
                             // if motion vectors are not display size
-                            ImGui::BeginDisabled(!currentFeature->LowResMV());
+                            ImGui::BeginDisabled(!currentFeature->LowResMV() &&
+                                                 currentFeature->RenderWidth() != currentFeature->DisplayWidth());
 
                             ImGui::SeparatorText("Output Scaling");
 

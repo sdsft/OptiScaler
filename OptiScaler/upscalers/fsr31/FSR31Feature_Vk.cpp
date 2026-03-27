@@ -193,7 +193,8 @@ bool FSR31FeatureVk::InitFSR3(const NVSDK_NGX_Parameter* InParameters)
             LOG_INFO("contextDesc.initFlags (NonLinearColorSpace) {0:b}", _contextDesc.flags);
         }
 
-        if (Config::Instance()->OutputScalingEnabled.value_or_default() && LowResMV())
+        if (Config::Instance()->OutputScalingEnabled.value_or_default() &&
+            (LowResMV() || RenderWidth() == DisplayWidth()))
         {
             float ssMulti = Config::Instance()->OutputScalingMultiplier.value_or_default();
 
@@ -226,7 +227,8 @@ bool FSR31FeatureVk::InitFSR3(const NVSDK_NGX_Parameter* InParameters)
             Config::Instance()->OutputScalingMultiplier.set_volatile_value(1.0f);
 
             // if output scaling active let it to handle downsampling
-            if (Config::Instance()->OutputScalingEnabled.value_or_default() && LowResMV())
+            if (Config::Instance()->OutputScalingEnabled.value_or_default() &&
+                (LowResMV() || RenderWidth() == DisplayWidth()))
             {
                 _contextDesc.maxUpscaleSize.width = _contextDesc.maxRenderSize.width;
                 _contextDesc.maxUpscaleSize.height = _contextDesc.maxRenderSize.height;
@@ -516,7 +518,8 @@ bool FSR31FeatureVk::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Parameter* 
 
     _sharpness = GetSharpness(InParameters);
     float ssMulti = Config::Instance()->OutputScalingMultiplier.value_or(1.5f);
-    bool useSS = Config::Instance()->OutputScalingEnabled.value_or(false) && LowResMV();
+    bool useSS =
+        Config::Instance()->OutputScalingEnabled.value_or_default() && (LowResMV() || RenderWidth() == DisplayWidth());
 
     bool rcasEnabled = Config::Instance()->RcasEnabled.value_or(true) &&
                        (_sharpness > 0.0f || (Config::Instance()->MotionSharpnessEnabled.value_or(false) &&
