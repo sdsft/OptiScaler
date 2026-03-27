@@ -5274,22 +5274,35 @@ bool MenuCommon::RenderMenu()
 
                         auto forceVsyncOn = config->ForceVsync.has_value() && config->ForceVsync.value();
                         auto forceVsyncOff = config->ForceVsync.has_value() && !config->ForceVsync.value();
+                        bool vsyncChanged = false;
 
                         if (ImGui::Checkbox("V-Sync On", &forceVsyncOn))
                         {
                             if (forceVsyncOn)
+                            {
                                 config->ForceVsync = true;
+                                vsyncChanged = true;
+                            }
                             else
+                            {
                                 config->ForceVsync.reset();
+                                vsyncChanged = true;
+                            }
                         }
                         ImGui::SameLine(0.0f, 16.0f);
 
                         if (ImGui::Checkbox("V-Sync Off", &forceVsyncOff))
                         {
                             if (forceVsyncOff)
+                            {
                                 config->ForceVsync = false;
+                                vsyncChanged = true;
+                            }
                             else
+                            {
                                 config->ForceVsync.reset();
+                                vsyncChanged = true;
+                            }
                         }
                         ImGui::SameLine(0.0f, 16.0f);
 
@@ -5301,16 +5314,28 @@ bool MenuCommon::RenderMenu()
                         if (ImGui::BeginCombo("Sync Int.", vsyncBuf.c_str()))
                         {
                             if (ImGui::Selectable("0", config->VsyncInterval.value_or_default() == 0))
+                            {
                                 config->VsyncInterval = 0;
+                                vsyncChanged = true;
+                            }
 
                             if (ImGui::Selectable("1", config->VsyncInterval.value_or_default() == 1))
+                            {
                                 config->VsyncInterval = 1;
+                                vsyncChanged = true;
+                            }
 
                             if (ImGui::Selectable("2", config->VsyncInterval.value_or_default() == 2))
+                            {
                                 config->VsyncInterval = 2;
+                                vsyncChanged = true;
+                            }
 
                             if (ImGui::Selectable("3", config->VsyncInterval.value_or_default() == 3))
+                            {
                                 config->VsyncInterval = 3;
+                                vsyncChanged = true;
+                            }
 
                             ImGui::EndCombo();
                         }
@@ -5320,9 +5345,21 @@ bool MenuCommon::RenderMenu()
                         ImGui::SameLine(0.0f, 16.0f);
 
                         if (ImGui::Button("Reset##10"))
+                        {
                             config->ForceVsync.reset();
+                            vsyncChanged = true;
+                        }
 
                         ShowHelpMarker("Force V-Sync On/Off & Sync Interval options");
+
+                        if (vsyncChanged && state.activeFgOutput == FGOutput::XeFG && state.currentFG != nullptr)
+                        {
+                            // To prevent XeLL issues
+                            LOG_DEBUG("V-Sync change detected, forcing XeFG reset");
+                            state.FGchanged = true;
+                            state.currentFG->UpdateTarget();
+                            state.currentFG->Deactivate();
+                        }
                     }
 
                     // MIPMAP BIAS & Anisotropy -----------------------------
