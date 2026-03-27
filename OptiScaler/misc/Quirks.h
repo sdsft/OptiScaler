@@ -125,8 +125,8 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("ninjagaiden4-wingdk.exe", GameQuirk::DisableResizeSkip, GameQuirk::DoNotPreserveFGSwapChain),
 
     // The Last of Us Part I
-    QUIRK_ENTRY("tlou-i.exe", GameQuirk::AllowedFrameAhead2),
-    QUIRK_ENTRY("tlou-i-l.exe", GameQuirk::AllowedFrameAhead2),
+    QUIRK_ENTRY("tlou-i.exe", GameQuirk::AllowedFrameAhead2, GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("tlou-i-l.exe", GameQuirk::AllowedFrameAhead2, GameQuirk::DisableDxgiSpoofing),
 
     // Horizon Forbidden West
     QUIRK_ENTRY("horizonforbiddenwest.exe", GameQuirk::AllowedFrameAhead2),
