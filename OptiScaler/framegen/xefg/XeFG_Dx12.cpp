@@ -706,6 +706,8 @@ bool XeFG_Dx12::Dispatch()
         LOG_WARN("Depth or Velocity is not ready, skipping");
         return false;
     }
+    
+    auto& state = State::Instance();
 
     if (XeFGProxy::SetUiCompositionState() != nullptr &&
         Config::Instance()->FGXeFGUIComposition.value_or_default() != _uiComposition && IsUsingHudless(fIndex))
@@ -719,7 +721,17 @@ bool XeFG_Dx12::Dispatch()
         auto uiResult = XeFGProxy::SetUiCompositionState()(_swapChainContext, uiState);
 
         if (uiResult != XEFG_SWAPCHAIN_RESULT_SUCCESS)
+        {
             LOG_ERROR("SetUiCompositionState error: {} ({})", magic_enum::enum_name(uiResult), (UINT) uiResult);
+        }
+        else
+        {
+            // To prevent XeLL issues
+            LOG_DEBUG("UI Composition state changed {}, skipping rendering for 10 frames", _uiComposition);
+            state.FGchanged = true;
+            UpdateTarget();
+            Deactivate();
+        }
     }
 
     if (XeFGProxy::SetNumInterpolatedFrames() != nullptr)
@@ -756,7 +768,6 @@ bool XeFG_Dx12::Dispatch()
         }
     }
 
-    auto& state = State::Instance();
 
     if (!_haveHudless.has_value())
     {
