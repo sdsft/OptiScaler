@@ -706,7 +706,7 @@ bool XeFG_Dx12::Dispatch()
         LOG_WARN("Depth or Velocity is not ready, skipping");
         return false;
     }
-    
+
     auto& state = State::Instance();
 
     if (XeFGProxy::SetUiCompositionState() != nullptr &&
@@ -767,7 +767,6 @@ bool XeFG_Dx12::Dispatch()
             }
         }
     }
-
 
     if (!_haveHudless.has_value())
     {
