@@ -377,6 +377,21 @@ static Fsr3::FfxErrorCode hkffxCreateFrameinterpolationSwapchainDX12(DXGI_SWAP_C
                                                                      IDXGIFactory* dxgiFactory,
                                                                      Fsr3::FfxSwapchain& outGameSwapChain)
 {
+    if (State::Instance().currentSwapchain != nullptr &&
+        State::Instance().currentSwapchainDesc.OutputWindow == desc->OutputWindow)
+    {
+        auto refCount = State::Instance().currentSwapchain->Release();
+
+        while (refCount > 0)
+        {
+            refCount = State::Instance().currentSwapchain->Release();
+        }
+
+        State::Instance().currentSwapchain = nullptr;
+        State::Instance().currentFGSwapchain = nullptr;
+        State::Instance().currentSwapchainDesc = {};
+    }
+
     auto result = dxgiFactory->CreateSwapChain(queue, desc, (IDXGISwapChain**) &outGameSwapChain);
 
     return result == S_OK ? Fsr3::FFX_OK : Fsr3::FFX_ERROR_BACKEND_API_ERROR;
@@ -392,6 +407,22 @@ static Fsr3::FfxErrorCode hkffxCreateFrameinterpolationSwapchainForHwndDX12(
     if (dxgiFactory->QueryInterface(IID_PPV_ARGS(&df)) == S_OK)
     {
         df->Release();
+
+        if (State::Instance().currentSwapchain != nullptr &&
+            State::Instance().currentSwapchainDesc.OutputWindow == hWnd)
+        {
+            auto refCount = State::Instance().currentSwapchain->Release();
+
+            while (refCount > 0)
+            {
+                refCount = State::Instance().currentSwapchain->Release();
+            }
+
+            State::Instance().currentSwapchain = nullptr;
+            State::Instance().currentFGSwapchain = nullptr;
+            State::Instance().currentSwapchainDesc = {};
+        }
+
         result = df->CreateSwapChainForHwnd(queue, hWnd, desc1, fullscreenDesc, nullptr,
                                             (IDXGISwapChain1**) &outGameSwapChain);
     }
