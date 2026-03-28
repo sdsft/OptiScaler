@@ -333,7 +333,7 @@ ffxReturnCode_t ffxCreateContext_Dx12FG(ffxContext* context, ffxCreateContextDes
         {
             auto refCount = State::Instance().currentSwapchain->Release();
 
-            while (refCount > 0)
+            while (refCount > 0 && refCount != 0xffffffff)
             {
                 refCount = State::Instance().currentSwapchain->Release();
             }
@@ -385,7 +385,7 @@ ffxReturnCode_t ffxCreateContext_Dx12FG(ffxContext* context, ffxCreateContextDes
         {
             auto refCount = State::Instance().currentSwapchain->Release();
 
-            while (refCount > 0)
+            while (refCount > 0 && refCount != 0xffffffff)
             {
                 refCount = State::Instance().currentSwapchain->Release();
             }
@@ -441,7 +441,7 @@ ffxReturnCode_t ffxDestroyContext_Dx12FG(ffxContext* context, const ffxAllocatio
         {
             auto refCount = State::Instance().currentSwapchain->Release();
 
-            while (refCount > 0)
+            while (refCount > 0 && refCount != 0xffffffff)
             {
                 refCount = State::Instance().currentSwapchain->Release();
             }

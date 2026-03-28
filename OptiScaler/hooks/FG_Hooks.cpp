@@ -1140,7 +1140,7 @@ HRESULT FGHooks::FGPresent(void* This, UINT SyncInterval, UINT Flags, const DXGI
     return result;
 }
 
-HRESULT FGHooks::hkFGRelease(IDXGISwapChain* This)
+ULONG FGHooks::hkFGRelease(IDXGISwapChain* This)
 {
     // We already released this one, prevent crashes
     if (This == oldSwapChain)
@@ -1235,6 +1235,20 @@ HRESULT FGHooks::hkFGRelease(IDXGISwapChain* This)
 
             LOG_DEBUG("FG Swapchain released, clearing currentFGSwapchain");
             State::Instance().currentFGSwapchain = nullptr;
+
+            if (State::Instance().currentSwapchain != nullptr &&
+                State::Instance().currentSwapchainDesc.OutputWindow == _hwnd)
+            {
+                auto refCount = State::Instance().currentSwapchain->Release();
+
+                while (refCount > 0 && refCount != 0xffffffff)
+                {
+                    refCount = State::Instance().currentSwapchain->Release();
+                }
+
+                State::Instance().currentSwapchain = nullptr;
+                State::Instance().currentSwapchainDesc = {};
+            }
 
             skipReleaseChecks = false;
 
