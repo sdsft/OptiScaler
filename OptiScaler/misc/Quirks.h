@@ -40,6 +40,7 @@ enum class GameQuirk : uint64_t
     SpoofRegistry,
     DisableFakenvapi,
     DoNotPreserveFGSwapChain,
+    DoNotSkipResize,
     OldOverlayMenu,
 
     // Quirks that are applied deeper in code
@@ -186,6 +187,9 @@ static const QuirkEntry quirkTable[] = {
 
     // Duet Night Abyss
     QUIRK_ENTRY("em-win64-shipping.exe", GameQuirk::DontUseNtDllHooks),
+
+    // The Talos Principle 2
+    QUIRK_ENTRY("talos2-win64-shipping.exe", GameQuirk::DoNotPreserveFGSwapChain, GameQuirk::DoNotSkipResize),
 
     // The Callisto Protocol
     // FSR2 only, no spoof needed
