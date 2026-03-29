@@ -106,6 +106,8 @@ DEFINE_NAME_VECTORS(skipDxgiWrapping, "eosovh-win32-shipping",
 );
 // clang-format on
 
+DEFINE_NAME_VECTORS(eosOverlay, "eosovh-win32-shipping", "eosovh-win64-shipping");
+
 DEFINE_NAME_VECTORS(dx11, "d3d11");
 DEFINE_NAME_VECTORS(dx12, "d3d12");
 DEFINE_NAME_VECTORS(dx12agility, "d3d12core");
