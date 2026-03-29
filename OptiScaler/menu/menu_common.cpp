@@ -1400,7 +1400,9 @@ static float MenuResolutionScale(ImGuiIO io)
         y = (float) io.DisplaySize.y;
 
     // 1000p is minimum for 1.0 menu ratio
-    float result = (float) ((int) (y / 100.0f)) / 10.0f;
+    float result = (float) ((int) (y / 108.0f)) / 10.0f;
+
+    result = std::round(result * 10.0f) / 10.0f;
 
     if (result < 0.5f)
         result = 0.5f;
