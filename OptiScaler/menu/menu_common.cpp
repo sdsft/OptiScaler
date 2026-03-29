@@ -5661,6 +5661,21 @@ bool MenuCommon::RenderMenu()
                     io.WantCaptureMouse = false;
                 }
 
+                auto winSize = ImGui::GetWindowSize();
+                auto winPos = ImGui::GetWindowPos();
+
+                auto textSize = ImGui::CalcTextSize("Open Wiki (?)");
+                ImGui::SameLine(winSize.x - textSize.x - (24.0f * menuResScale));
+
+                // Make button text underline
+                if (ImGui::Button("Open Wiki"))
+                {
+                    auto pIO = &ImGui::GetPlatformIO();
+                    auto ctx = ImGui::GetCurrentContext();
+                    pIO->Platform_OpenInShellFn(ctx, "https://github.com/optiscaler/OptiScaler/wiki");
+                }
+                ShowHelpMarker("Click to open the OptiScaler Wiki\npage in your default browser");
+
                 ImGui::Spacing();
                 ImGui::Separator();
 
@@ -5672,9 +5687,6 @@ bool MenuCommon::RenderMenu()
                         "nvngx.ini detected, please move over to using OptiScaler.ini and delete the old config");
                     ImGui::Spacing();
                 }
-
-                auto winSize = ImGui::GetWindowSize();
-                auto winPos = ImGui::GetWindowPos();
 
                 if (winPos.x == 60.0 && winSize.x > 100)
                 {
