@@ -713,6 +713,12 @@ bool XeFG_Dx12::Dispatch()
     if (XeFGProxy::SetUiCompositionState() != nullptr &&
         Config::Instance()->FGXeFGUIComposition.value_or_default() != _uiComposition && IsUsingHudless(fIndex))
     {
+        // To prevent XeLL issues
+        LOG_DEBUG("UI Composition state changed {}, skipping rendering for 10 frames", _uiComposition);
+        state.FGchanged = true;
+        UpdateTarget();
+        Deactivate();
+
         _uiComposition = Config::Instance()->FGXeFGUIComposition.value_or_default();
 
         auto uiState =
@@ -722,17 +728,7 @@ bool XeFG_Dx12::Dispatch()
         auto uiResult = XeFGProxy::SetUiCompositionState()(_swapChainContext, uiState);
 
         if (uiResult != XEFG_SWAPCHAIN_RESULT_SUCCESS)
-        {
             LOG_ERROR("SetUiCompositionState error: {} ({})", magic_enum::enum_name(uiResult), (UINT) uiResult);
-        }
-        else
-        {
-            // To prevent XeLL issues
-            LOG_DEBUG("UI Composition state changed {}, skipping rendering for 10 frames", _uiComposition);
-            state.FGchanged = true;
-            UpdateTarget();
-            Deactivate();
-        }
     }
 
     if (XeFGProxy::SetNumInterpolatedFrames() != nullptr)
@@ -750,21 +746,21 @@ bool XeFG_Dx12::Dispatch()
             LOG_INFO("Interpolation count changed {} -> {}", _framesToInterpolate,
                      Config::Instance()->FGXeFGInterpolationCount.value_or_default());
 
+            state.FGchanged = true;
+            UpdateTarget();
+            Deactivate();
+
             ScopedSkipSpoofing skipSpoofing {};
 
             auto intResult = XeFGProxy::SetNumInterpolatedFrames()(
                 _swapChainContext, Config::Instance()->FGXeFGInterpolationCount.value_or_default());
 
+            _framesToInterpolate = Config::Instance()->FGXeFGInterpolationCount.value_or_default();
+
             if (intResult != XEFG_SWAPCHAIN_RESULT_SUCCESS)
             {
                 LOG_ERROR("SetNumInterpolatedFrames error: {} ({})", magic_enum::enum_name(intResult),
                           (UINT) intResult);
-            }
-            else
-            {
-                LOG_DEBUG("Interpolation count set to: {}",
-                          Config::Instance()->FGXeFGInterpolationCount.value_or_default());
-                _framesToInterpolate = Config::Instance()->FGXeFGInterpolationCount.value_or_default();
             }
         }
     }
