@@ -152,6 +152,7 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("monster_hunter_stories_3_twisted_reflection.exe", GameQuirk::RestoreComputeSigOnNonNvidia,
                 GameQuirk::DisableDxgiSpoofing, GameQuirk::RestoreComputeSigOnNvidia),
     // REF PDUpscaler branch
+    // Old menu needed to avoid the invisible overlay while upscaling is active
     QUIRK_ENTRY("re2.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::OldOverlayMenu),
     QUIRK_ENTRY("re3.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::OldOverlayMenu),
     QUIRK_ENTRY("re4.exe", GameQuirk::DisableDxgiSpoofing, GameQuirk::OldOverlayMenu),
@@ -283,6 +284,11 @@ static const QuirkEntry quirkTable[] = {
     // Crimson Desert
     // Spoofing disabled due to "unsupported GPU" error
     QUIRK_ENTRY("crimsondesert.exe", GameQuirk::DisableDxgiSpoofing),
+
+    // Assassin's Creed Mirage
+    // Game not loading SL plugin even while spoofing, also avoids the "unsupported video driver" notification
+    QUIRK_ENTRY("acmirage.exe", GameQuirk::DisableDxgiSpoofing),
+    QUIRK_ENTRY("acmirage_plus.exe", GameQuirk::DisableDxgiSpoofing),
 
     // SL spoof enough to unlock everything DLSS/No spoof needed for DLSS inputs
     //
