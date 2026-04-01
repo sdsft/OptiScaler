@@ -5676,7 +5676,9 @@ bool MenuCommon::RenderMenu()
                     auto ctx = ImGui::GetCurrentContext();
                     pIO->Platform_OpenInShellFn(ctx, "https://github.com/optiscaler/OptiScaler/wiki");
                 }
-                ShowHelpMarker("Click to open the OptiScaler Wiki\npage in your default browser");
+                ShowHelpMarker("Click to open the OptiScaler Wiki page\nin your default browser\n\n"
+                               "Compatibility list with known game issues\nand workarounds, FG options explained\n"
+                               "and other useful info");
 
                 ImGui::Spacing();
                 ImGui::Separator();
