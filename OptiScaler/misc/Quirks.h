@@ -290,6 +290,10 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("acmirage.exe", GameQuirk::DisableDxgiSpoofing),
     QUIRK_ENTRY("acmirage_plus.exe", GameQuirk::DisableDxgiSpoofing),
 
+    // DCS World
+    // Fakenvapi seems to cause a crash when switching to FSR4 (INT8 only?)
+    QUIRK_ENTRY("dcs.exe", GameQuirk::DisableFakenvapi),
+
     // SL spoof enough to unlock everything DLSS/No spoof needed for DLSS inputs
     //
     // The Witcher 3, Alan Wake 2, Crysis 3 Remastered, Marvel's Guardians of the Galaxy, UNCHARTED: Legacy of Thieves
