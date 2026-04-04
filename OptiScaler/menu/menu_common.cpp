@@ -5620,7 +5620,7 @@ bool MenuCommon::RenderMenu()
 
                 if (ImGui::BeginCombo("Menu Scale", selectedScaleName))
                 {
-                    for (int n = 0; n < 16; n++)
+                    for (int n = 0; n < std::size(uiScales); n++)
                     {
                         if (ImGui::Selectable(uiScales[n], (_selectedScale == n)))
                         {
@@ -5666,8 +5666,13 @@ bool MenuCommon::RenderMenu()
                 auto winSize = ImGui::GetWindowSize();
                 auto winPos = ImGui::GetWindowPos();
 
+                ImGui::SameLine();
+
                 auto textSize = ImGui::CalcTextSize("Open Wiki (?)");
-                ImGui::SameLine(winSize.x - textSize.x - (24.0f * menuResScale));
+                textSize.x += ImGui::GetStyle().FramePadding.x * 3.0f;
+
+                float avail = ImGui::GetContentRegionAvail().x;
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - textSize.x);
 
                 // Make button text underline
                 if (ImGui::Button("Open Wiki"))
