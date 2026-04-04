@@ -13,6 +13,7 @@
 #include <magic_enum.hpp>
 #include <sl1_reflex.h>
 #include <nvapi/fakenvapi.h>
+#include <inputs/FG/DLSSG_Mod.h>
 
 sl::RenderAPI StreamlineHooks::renderApi = sl::RenderAPI::eCount;
 std::mutex StreamlineHooks::setConstantsMutex {};
@@ -446,6 +447,14 @@ void StreamlineHooks::spoofArch(uint32_t currentArch, sl::Feature feature)
     // Don't change arch for DLSSG with ada and above
     else if (feature == sl::kFeatureDLSS_G)
     {
+        if (State::Instance().activeFgOutput == FGOutput::Nukems)
+        {
+            DLSSGMod::InitDLSSGMod_Dx12();
+            DLSSGMod::InitDLSSGMod_Vulkan();
+            if (!DLSSGMod::isDx12Available() && !DLSSGMod::isVulkanAvailable())
+                return setArch(0);
+        }
+
         if (currentArch < NV_GPU_ARCHITECTURE_AD100)
             return setArch(maxArch);
     }
