@@ -5345,9 +5345,7 @@ bool MenuCommon::RenderMenu()
                         {
                             // To prevent XeLL issues
                             LOG_DEBUG("V-Sync change detected, forcing XeFG reset");
-                            state.FGchanged = true;
-                            state.currentFG->UpdateTarget();
-                            state.currentFG->Deactivate();
+                            state.WAR_xefgRequestFGToggle = true;
                         }
                     }
 

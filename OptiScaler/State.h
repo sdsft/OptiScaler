@@ -171,6 +171,7 @@ class State
     float lastMipBiasMax = -100.0f;
 
     int xefgMaxInterpolationCount = 1;
+    bool WAR_xefgRequestFGToggle = false;
 
     // DLSS
     bool dlssPresetsOverriddenExternally = false;
