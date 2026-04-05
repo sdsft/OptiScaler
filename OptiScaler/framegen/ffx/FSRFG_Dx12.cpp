@@ -616,7 +616,29 @@ ffxReturnCode_t FSRFG_Dx12::DispatchCallback(ffxDispatchDescFrameGeneration* par
         return FFX_API_RETURN_OK;
     }
 
-    if (State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup)
+    static bool lastFGDisableHudless = Config::Instance()->FGDisableHudless.value_or_default();
+    if (lastFGDisableHudless != Config::Instance()->FGDisableHudless.value_or_default())
+    {
+        lastFGDisableHudless = Config::Instance()->FGDisableHudless.value_or_default();
+
+        // We can't just stop sending hudless if we have provided a hudless desc
+        // Recreate FG if it was linked at creation
+        if (_linkedHudlesDesc)
+        {
+            if (lastFGDisableHudless)
+                _lastHudlessFormat = FFX_API_SURFACE_FORMAT_UNKNOWN;
+
+            params->numGeneratedFrames = 0;
+            _lastFrameId = params->frameID;
+
+            state.FGchanged = true;
+            state.SCchanged = true;
+
+            return FFX_API_RETURN_OK;
+        }
+    }
+
+    if (State::Instance().gameQuirks & GameQuirk::FSRFGHudlessMismatchFixup && !lastFGDisableHudless)
     {
         auto presentWithHud = (ID3D12Resource*) params->presentColor.resource;
         auto hudlessResource = _resourceCopy[fIndex][FG_ResourceType::HudlessColor];
@@ -1030,11 +1052,13 @@ void FSRFG_Dx12::CreateContext(ID3D12Device* device, FG_Constants& fgConstants)
         _usingHudlessFormat = _lastHudlessFormat;
         _lastHudlessFormat = FFX_API_SURFACE_FORMAT_UNKNOWN;
         createFg.header.pNext = &hudlessDesc.header;
+        _linkedHudlesDesc = true;
     }
     else
     {
         _usingHudlessFormat = FFX_API_SURFACE_FORMAT_UNKNOWN;
         createFg.header.pNext = &backendDesc.header;
+        _linkedHudlesDesc = false;
     }
 
     {
