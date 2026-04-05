@@ -5850,7 +5850,16 @@ bool MenuCommon::RenderMenu()
                     ImGui::Separator();
                     ImGui::Spacing();
 
-                    ImGui::SameLine(ImGui::GetWindowWidth() - 130.0f);
+                    ImGui::SameLine();
+                    ImGui::Spacing();
+
+                    constexpr float spacing = 6.0f;
+                    auto textSize = ImGui::CalcTextSize("Use Value");
+                    textSize += ImGui::CalcTextSize("Close");
+                    textSize.x += ImGui::GetStyle().FramePadding.x * 5.0f + spacing; // 2 sides * 2 buttons + 1
+
+                    float avail = ImGui::GetContentRegionAvail().x;
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - textSize.x);
 
                     if (ImGui::Button("Use Value"))
                     {
@@ -5858,7 +5867,7 @@ bool MenuCommon::RenderMenu()
                         _showMipmapCalcWindow = false;
                     }
 
-                    ImGui::SameLine(0.0f, 6.0f);
+                    ImGui::SameLine(0.0f, spacing);
 
                     if (ImGui::Button("Close"))
                         _showMipmapCalcWindow = false;
