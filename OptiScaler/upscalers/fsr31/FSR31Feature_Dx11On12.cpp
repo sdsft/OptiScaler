@@ -606,24 +606,17 @@ bool FSR31FeatureDx11on12::InitFSR3(const NVSDK_NGX_Parameter* InParameters)
         versionQuery.device = _dx11on12Device; // only for DirectX 12 applications
         uint64_t versionCount = 0;
         versionQuery.outputCount = &versionCount;
-        {
-            // WAR for FSR 4.1 calling dxgi, this calling vkCreateInstance on Linux
-            // and that destroying vulkan objects and the menu
-            ScopedSkipVulkanHooks skipVulkanHooks;
-            // get number of versions for allocation
-            FfxApiProxy::D3D12_Query(nullptr, &versionQuery.header);
-        }
+
+        // get number of versions for allocation
+        FfxApiProxy::D3D12_Query(nullptr, &versionQuery.header);
 
         State::Instance().ffxUpscalerVersionIds.resize(versionCount);
         State::Instance().ffxUpscalerVersionNames.resize(versionCount);
         versionQuery.versionIds = State::Instance().ffxUpscalerVersionIds.data();
         versionQuery.versionNames = State::Instance().ffxUpscalerVersionNames.data();
-        {
-            // Same as above
-            ScopedSkipVulkanHooks skipVulkanHooks;
-            // fill version ids and names arrays.
-            FfxApiProxy::D3D12_Query(nullptr, &versionQuery.header);
-        }
+
+        // fill version ids and names arrays.
+        FfxApiProxy::D3D12_Query(nullptr, &versionQuery.header);
 
         _contextDesc.flags = 0;
         _contextDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
