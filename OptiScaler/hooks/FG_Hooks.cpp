@@ -26,6 +26,7 @@ inline static UINT64 resizeFenceValue = 0;
 inline static HANDLE resizeFenceEvent = nullptr;
 inline static IUnknown* oldSwapChain = nullptr;
 inline static ID3D12CommandQueue* currentCommandQueue = nullptr;
+inline static bool _forcedHdrForXeFG = false;
 
 #if (XEFG_RESOURCE_REF_LIMIT == 0)
 inline static std::vector<void*> oldBackBuffers;
