@@ -1709,10 +1709,33 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             {
                 spdlog::info("Running on Nvidia");
 
+                // TODO: Upscaler inputs also get paths so make this code shared
                 auto exePath = Util::ExePath().remove_filename();
                 State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(exePath, "nvngx_dlss.dll");
                 State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
                 State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
+
+                if (!State::Instance().NVNGX_DLSS_Path.has_value() &&
+                    Config::Instance()->NVNGX_DLSS_Library.has_value())
+                {
+                    std::filesystem::path dlssPath(Config::Instance()->NVNGX_DLSS_Library.value());
+                    State::Instance().NVNGX_DLSS_Path =
+                        Util::FindFilePath(dlssPath.remove_filename(), "nvngx_dlss.dll");
+                }
+
+                if (Config::Instance()->DLSSFeaturePath.has_value())
+                {
+                    std::filesystem::path dlssFeaturePath(Config::Instance()->DLSSFeaturePath.value());
+
+                    if (!State::Instance().NVNGX_DLSS_Path.has_value())
+                        State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(dlssFeaturePath, "nvngx_dlss.dll");
+
+                    if (!State::Instance().NVNGX_DLSSD_Path.has_value())
+                        State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(dlssFeaturePath, "nvngx_dlssd.dll");
+
+                    if (!State::Instance().NVNGX_DLSSG_Path.has_value())
+                        State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(dlssFeaturePath, "nvngx_dlssg.dll");
+                }
 
                 if (State::Instance().NVNGX_DLSS_Path.has_value())
                 {

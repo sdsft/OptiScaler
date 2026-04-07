@@ -649,6 +649,12 @@ class NVNGXProxy
 
     static void GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo* fcInfo)
     {
+        if (State::Instance().NVNGX_DLSS_Path.has_value())
+        {
+            std::filesystem::path dlssPath(State::Instance().NVNGX_DLSS_Path.value());
+            State::Instance().NVNGX_FeatureInfo_Paths.push_back(dlssPath.remove_filename().wstring());
+        }
+
         // Allocate memory for the array of const wchar_t*
         wchar_t const** paths = new const wchar_t*[State::Instance().NVNGX_FeatureInfo_Paths.size()];
 
