@@ -422,6 +422,9 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY("wwzretail.exe", GameQuirk::UseFsr2VulkanInputs, GameQuirk::EnableVulkanExtensionSpoofing,
                 GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceDepthD32S8),
 
+    QUIRK_ENTRY("wwzretailegs.exe", GameQuirk::UseFsr2VulkanInputs, GameQuirk::EnableVulkanExtensionSpoofing,
+                GameQuirk::DisableDxgiSpoofing, GameQuirk::ForceDepthD32S8),
+
     // Baldur's Gate 3
     // VK Ext spoof needed for FSR3
     QUIRK_ENTRY("bg3.exe", GameQuirk::EnableVulkanExtensionSpoofing),
