@@ -107,10 +107,10 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) != S_OK)
     {
         LOG_ERROR("FG Feature requires D3D12 Command Queue!");
-        currentCommandQueue = cq;
         return E_INVALIDARG;
     }
 
+    currentCommandQueue = cq;
     cq->Release();
 
     if (State::Instance().currentFG == nullptr)
@@ -215,10 +215,10 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
     if (pDevice->QueryInterface(IID_PPV_ARGS(&cq)) != S_OK)
     {
         LOG_ERROR("FG Feature requires D3D12 Command Queue!");
-        currentCommandQueue = cq;
         return E_INVALIDARG;
     }
 
+    currentCommandQueue = cq;
     cq->Release();
 
     if (State::Instance().currentFG == nullptr)
@@ -602,7 +602,7 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
     State::Instance().SCAllowTearing = (SwapChainFlags & DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING) > 0;
     State::Instance().SCLastFlags = SwapChainFlags;
 
-    HRESULT result;
+    HRESULT result = E_FAIL;
 
     // Release menu render targets
     if (Config::Instance()->OverlayMenu.value_or_default())
@@ -642,7 +642,78 @@ HRESULT FGHooks::hkResizeBuffers(IDXGISwapChain* This, UINT BufferCount, UINT Wi
 
     // Force HDR10 for XeFG if HDR16 is used
     if (State::Instance().activeFgOutput == FGOutput::XeFG && NewFormat >= DXGI_FORMAT_R16G16B16A16_TYPELESS &&
-        NewFormat <= DXGI_FORMAT_R16G16B16A16_SINT)
+        NewFormat <= DXGI_FORMAT_R16G16B16A16_SINT && !Config::Instance()->ForceHDR.has_value())
+    {
+        if (!Config::Instance()->ForceHDR.has_value())
+        {
+            LOG_INFO("XeFG is active, forcing HDR10");
+            Config::Instance()->ForceHDR.set_volatile_value(true);
+            Config::Instance()->UseHDR10.set_volatile_value(true);
+            Config::Instance()->SkipColorSpace.set_volatile_value(true);
+            _forcedHdrForXeFG = true;
+        }
+    }
+    else if (_forcedHdrForXeFG)
+    {
+        LOG_INFO("Disabling forced HDR10");
+        Config::Instance()->ForceHDR.reset();
+        Config::Instance()->UseHDR10.reset();
+        Config::Instance()->SkipColorSpace.reset();
+        _forcedHdrForXeFG = false;
+    }
+
+    // Crude implementation of EndlesslyFlowering's AutoHDR-ReShade
+    // https://github.com/EndlesslyFlowering/AutoHDR-ReShade
+    if (Config::Instance()->ForceHDR.value_or_default())
+    {
+        LOG_INFO("Force HDR on");
+
+        IDXGISwapChain3* _real3 = nullptr;
+        if (This->QueryInterface(IID_PPV_ARGS(&_real3)) == S_OK)
+        {
+            do
+            {
+                NewFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+                DXGI_COLOR_SPACE_TYPE hdrCS = DXGI_COLOR_SPACE_RGB_FULL_G10_NONE_P709;
+
+                if (Config::Instance()->UseHDR10.value_or_default())
+                {
+                    NewFormat = DXGI_FORMAT_R10G10B10A2_UNORM;
+                    hdrCS = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
+                }
+
+                if (!Config::Instance()->SkipColorSpace.value_or_default())
+                {
+                    UINT css = 0;
+
+                    auto result = _real3->CheckColorSpaceSupport(hdrCS, &css);
+
+                    if (result != S_OK)
+                    {
+                        LOG_ERROR("CheckColorSpaceSupport error: {:X}", (UINT) result);
+                        break;
+                    }
+
+                    if (DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT & css)
+                    {
+                        result = _real3->SetColorSpace1(hdrCS);
+
+                        if (result != S_OK)
+                        {
+                            LOG_ERROR("SetColorSpace1 error: {:X}", (UINT) result);
+                            break;
+                        }
+                    }
+
+                    LOG_INFO("HDR format and color space are set");
+                }
+
+            } while (false);
+
+            _real3->Release();
+        }
+    }
+
     {
         ScopedSkipSpoofing skipSpoofing {};
         result = o_FGSCResizeBuffers(This, BufferCount, Width, Height, NewFormat, SwapChainFlags);
