@@ -237,8 +237,10 @@ class XeSSProxy
             std::filesystem::path cfgPath(Config::Instance()->XeSSLibrary.value().c_str());
             LOG_INFO(L"Trying to load libxess.dll from ini path: {}", cfgPath.wstring());
 
-            cfgPath = cfgPath / libraryName;
-            mainModule = NtdllProxy::LoadLibraryExW_Ldr(cfgPath.c_str(), NULL, 0);
+            if (cfgPath.has_filename())
+                mainModule = NtdllProxy::LoadLibraryExW_Ldr(cfgPath.c_str(), NULL, 0);
+            else
+                mainModule = NtdllProxy::LoadLibraryExW_Ldr((cfgPath / libraryName).c_str(), NULL, 0);
         }
 
         if (mainModule == nullptr)
