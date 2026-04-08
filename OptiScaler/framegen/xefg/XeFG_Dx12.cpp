@@ -154,7 +154,8 @@ bool XeFG_Dx12::DestroySwapchainContext()
             if (XeLLProxy::Context() != nullptr)
                 XeLLProxy::DestroyXeLLContext();
 
-            State::Instance().currentFGSwapchain = nullptr;
+            if (!Config::Instance()->FGPreserveSwapChain.value_or_default())
+                State::Instance().currentFGSwapchain = nullptr;
         }
     }
 
@@ -1576,7 +1577,9 @@ bool XeFG_Dx12::ReleaseSwapchain(HWND hwnd)
             DestroySwapchainContext();
 
         _swapChainContext = nullptr;
-        State::Instance().currentFGSwapchain = nullptr;
+
+        if (!Config::Instance()->FGPreserveSwapChain.value_or_default())
+            State::Instance().currentFGSwapchain = nullptr;
     }
 
     ReleaseObjects();

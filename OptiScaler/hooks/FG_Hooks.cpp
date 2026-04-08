@@ -153,7 +153,8 @@ HRESULT FGHooks::CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI
 
         // Looks like game is creating new swapchain,
         // without releasing old one, be sure gpu is in idle state
-        if (State::Instance().currentFGSwapchain != nullptr)
+        if (!Config::Instance()->FGPreserveSwapChain.value_or_default() &&
+            State::Instance().currentFGSwapchain != nullptr)
         {
             LOG_WARN("Looks like game is creating new swapchain, without releasing old one!");
 
@@ -261,7 +262,8 @@ HRESULT FGHooks::CreateSwapChainForHwnd(IDXGIFactory* pFactory, IUnknown* pDevic
 
         // Looks like game is creating new swapchain,
         // without releasing old one, be sure gpu is in idle state
-        if (State::Instance().currentFGSwapchain != nullptr)
+        if (!Config::Instance()->FGPreserveSwapChain.value_or_default() &&
+            State::Instance().currentFGSwapchain != nullptr)
         {
             LOG_WARN("Looks like game is creating new swapchain, without releasing old one!");
 

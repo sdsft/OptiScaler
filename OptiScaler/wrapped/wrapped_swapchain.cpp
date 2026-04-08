@@ -437,6 +437,16 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
 
     LOG_TRACE("Count: {}, caller: {}", _refcount, Util::WhoIsTheCaller(_ReturnAddress()));
 
+    // Preserve swapchain when SL releasing it
+    if (ret == 0 && State::Instance().activeFgOutput != FGOutput::NoFG &&
+        State::Instance().activeFgOutput != FGOutput::Nukems &&
+        Config::Instance()->FGPreserveSwapChain.value_or_default() && !State::Instance().isShuttingDown)
+    {
+        LOG_DEBUG("Real swapchain is released, probaby SL. Preserving FG swapchain");
+        AddRef();
+        return ret;
+    }
+
     if (ret == 0)
     {
 #ifdef USE_LOCAL_MUTEX

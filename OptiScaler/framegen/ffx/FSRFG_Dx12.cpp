@@ -733,10 +733,7 @@ bool FSRFG_Dx12::Shutdown()
     Deactivate();
 
     if (_swapChainContext != nullptr)
-    {
-        if (ReleaseSwapchain(_hwnd))
-            State::Instance().currentFGSwapchain = nullptr;
-    }
+        ReleaseSwapchain(_hwnd);
 
     ReleaseObjects();
 
@@ -918,16 +915,19 @@ bool FSRFG_Dx12::ReleaseSwapchain(HWND hwnd)
     if (_fgContext != nullptr)
         DestroyFGContext();
 
-    if (!State::Instance().isShuttingDown)
+    if (!Config::Instance()->FGPreserveSwapChain.value_or_default())
     {
-        if (_swapChainContext != nullptr)
+        if (!State::Instance().isShuttingDown)
         {
-            auto result = FfxApiProxy::D3D12_DestroyContext(&_swapChainContext, nullptr);
-            LOG_INFO("Destroy Ffx Swapchain Result: {}({})", result, FfxApiProxy::ReturnCodeToString(result));
-        }
+            if (_swapChainContext != nullptr)
+            {
+                auto result = FfxApiProxy::D3D12_DestroyContext(&_swapChainContext, nullptr);
+                LOG_INFO("Destroy Ffx Swapchain Result: {}({})", result, FfxApiProxy::ReturnCodeToString(result));
+            }
 
-        _swapChainContext = nullptr;
-        State::Instance().currentFGSwapchain = nullptr;
+            _swapChainContext = nullptr;
+            State::Instance().currentFGSwapchain = nullptr;
+        }
     }
 
     if (Config::Instance()->FGUseMutexForSwapchain.value_or_default())
