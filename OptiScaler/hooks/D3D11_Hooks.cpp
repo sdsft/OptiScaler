@@ -117,7 +117,7 @@ static HRESULT hkD3D11On12CreateDevice(IUnknown* pDevice, UINT Flags, const D3D_
                                        ID3D11Device** ppDevice, ID3D11DeviceContext** ppImmediateContext,
                                        D3D_FEATURE_LEVEL* pChosenFeatureLevel)
 {
-    LOG_DEBUG("Caller: {}", Util::WhoIsTheCaller(_ReturnAddress()));
+    LOG_DEBUG("Caller: {}, Device: {:X}", Util::WhoIsTheCaller(_ReturnAddress()), (UINT64) pDevice);
 
 #ifdef ENABLE_DEBUG_LAYER_DX11
     Flags |= D3D11_CREATE_DEVICE_DEBUG;

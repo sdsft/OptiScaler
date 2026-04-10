@@ -892,6 +892,10 @@ HRESULT FGHooks::hkResizeBuffers1(IDXGISwapChain* This, UINT BufferCount, UINT W
 
     HRESULT result;
 
+    // Release menu render targets
+    if (Config::Instance()->OverlayMenu.value_or_default())
+        MenuOverlayDx::CleanupRenderTarget(false, NULL);
+
     // Release swapchain backbuffers to prevent errors when resizing
     if (State::Instance().activeFgOutput == FGOutput::XeFG)
     {
@@ -1133,7 +1137,7 @@ HRESULT FGHooks::FGPresent(void* This, UINT SyncInterval, UINT Flags, const DXGI
 
     auto fg = State::Instance().currentFG;
     bool mutexUsed = false;
-    if (willPresent && fg != nullptr && fg->IsActive() &&
+    if (willPresent && fg != nullptr && fg->IsActive() && !fg->IsPaused() &&
         Config::Instance()->FGUseMutexForSwapchain.value_or_default() && fg->Mutex.getOwner() != 2)
     {
         LOG_TRACE("Waiting FG->Mutex 2, current: {}", fg->Mutex.getOwner());
@@ -1216,13 +1220,17 @@ HRESULT FGHooks::FGPresent(void* This, UINT SyncInterval, UINT Flags, const DXGI
 
     if (willPresent && !State::Instance().reflexLimitsFps && State::Instance().activeFgOutput != FGOutput::NoFG &&
         !State::Instance().isRunningOnDXVK)
-        FrameLimit::sleep(fg != nullptr ? fg->IsActive() : false);
+    {
+        FrameLimit::sleep(fg != nullptr ? fg->IsActive() && !fg->IsPaused() : false);
+    }
 
     if (mutexUsed && fg != nullptr)
     {
         LOG_TRACE("Releasing FG->Mutex: {}", fg->Mutex.getOwner());
         fg->Mutex.unlockThis(2);
     }
+
+    LOG_DEBUG("Present finished");
 
     return result;
 }

@@ -1129,7 +1129,7 @@ void FSRFG_Dx12::Deactivate()
             _uiCommandListResetted[fIndex] = false;
         }
 
-        ffxReturnCode_t result = FFX_API_RETURN_OK;
+        ffxReturnCode_t result = FFX_API_RETURN_ERROR;
 
         if (_fgContext != nullptr)
         {
@@ -1140,13 +1140,14 @@ void FSRFG_Dx12::Deactivate()
             fgConfig.presentCallback = nullptr;
             fgConfig.HUDLessColor = FfxApiResource({});
 
-            auto result = FfxApiProxy::D3D12_Configure(&_fgContext, &fgConfig.header);
+            result = FfxApiProxy::D3D12_Configure(&_fgContext, &fgConfig.header);
 
             if (result == FFX_API_RETURN_OK)
                 _isActive = false;
         }
         else
         {
+            LOG_DEBUG("No context to deactivate, just set  active to false");
             _isActive = false;
         }
 
