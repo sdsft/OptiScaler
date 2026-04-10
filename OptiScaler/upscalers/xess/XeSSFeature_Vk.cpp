@@ -632,8 +632,8 @@ XeSSFeature_Vk::XeSSFeature_Vk(unsigned int handleId, NVSDK_NGX_Parameter* InPar
 {
     _initParameters = SetInitParameters(InParameters);
 
-    if (XeSSProxy::Module() == nullptr && XeSSProxy::InitXeSS())
-        XeSSProxy::HookXeSS();
+    if (XeSSProxy::Module() == nullptr)
+        XeSSProxy::InitXeSS();
 
     _moduleLoaded = XeSSProxy::Module() != nullptr && XeSSProxy::VKCreateContext() != nullptr;
 }

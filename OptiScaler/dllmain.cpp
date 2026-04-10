@@ -8,12 +8,15 @@
 #include "DllNames.h"
 
 #include "proxies/Dxgi_Proxy.h"
-#include <proxies/XeSS_Proxy.h>
-#include <proxies/NVNGX_Proxy.h>
 #include "proxies/Kernel32_Proxy.h"
 #include "proxies/KernelBase_Proxy.h"
 #include "proxies/Ntdll_Proxy.h"
 #include <proxies/IGDExt_Proxy.h>
+
+#include <proxies/XeSS_Proxy.h>
+#include <proxies/XeFG_Proxy.h>
+#include <proxies/XeLL_Proxy.h>
+#include <proxies/NVNGX_Proxy.h>
 #include <proxies/FfxApi_Proxy.h>
 
 #include "inputs/FSR2_Dx11.h"
@@ -121,8 +124,6 @@ static bool IsRunningOnWine()
 
 UINT customD3D12SDKVersion = 615;
 
-const char8_t* customD3D12SDKPath = u8".\\D3D12_Optiscaler\\"; // Hardcoded for now
-
 static void RunAgilityUpgrade(HMODULE dx12Module)
 {
     typedef HRESULT (*PFN_IsDeveloperModeEnabled)(BOOL* isEnabled);
@@ -153,7 +154,24 @@ static void RunAgilityUpgrade(HMODULE dx12Module)
 
         if (SUCCEEDED(hr))
         {
-            hr = sdkConfig->SetSDKVersion(customD3D12SDKVersion, reinterpret_cast<LPCSTR>(customD3D12SDKPath));
+            static bool pathSet = false;
+            static std::string path; // narrow string
+
+            if (!pathSet)
+            {
+                std::wstring widePath = Config::Instance()->MainDllPath.value();
+                widePath = std::filesystem::relative(widePath, Util::ExePath().parent_path());
+                widePath = widePath + L"\\";
+
+                // Properly convert wstring → string
+                int size = WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                path.resize(size - 1);
+                WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, path.data(), size, nullptr, nullptr);
+
+                pathSet = true;
+            }
+
+            hr = sdkConfig->SetSDKVersion(customD3D12SDKVersion, reinterpret_cast<LPCSTR>(path.c_str()));
             if (FAILED(hr))
             {
                 LOG_ERROR("Failed to upgrade Agility SDK: {0}", hr);
@@ -177,7 +195,7 @@ static void RunAgilityUpgrade(HMODULE dx12Module)
 
 void LoadAsiPlugins()
 {
-    std::filesystem::path pluginPath(Config::Instance()->PluginPath.value_or_default());
+    std::filesystem::path pluginPath(Config::Instance()->PluginPath.value());
     auto folderPath = pluginPath.wstring();
 
     LOG_DEBUG(L"Checking {} for *.asi", folderPath);
@@ -250,7 +268,7 @@ static void CheckWorkingMode()
     wchar_t sysFolder[MAX_PATH];
     GetSystemDirectory(sysFolder, MAX_PATH);
     std::filesystem::path sysPath(sysFolder);
-    std::filesystem::path pluginPath(Config::Instance()->PluginPath.value_or_default());
+    std::filesystem::path pluginPath(Config::Instance()->PluginPath.value());
 
     for (size_t i = 0; i < lCaseFilename.size(); i++)
         lCaseFilename[i] = std::tolower(lCaseFilename[i]);
@@ -947,7 +965,7 @@ static void CheckWorkingMode()
             if (xessModule != nullptr)
             {
                 LOG_DEBUG("libxess.dll already in memory");
-                XeSSProxy::HookXeSS(xessModule);
+                XeSSProxy::InitXeSS(xessModule);
             }
 
             HMODULE xessDx11Module = nullptr;
@@ -955,7 +973,7 @@ static void CheckWorkingMode()
             if (xessDx11Module != nullptr)
             {
                 LOG_DEBUG("libxess_dx11.dll already in memory");
-                XeSSProxy::HookXeSSDx11(xessDx11Module);
+                XeSSProxy::InitXeSSDx11(xessDx11Module);
             }
 
             // NVNGX
@@ -1510,7 +1528,12 @@ bool isNvidia()
 
     if (!nvapiModule)
     {
-        nvapiModule = NtdllProxy::LoadLibraryExW_Ldr(L"nvapi64.dll", NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        wchar_t sysFolder[MAX_PATH];
+        GetSystemDirectory(sysFolder, MAX_PATH);
+        std::filesystem::path sysPath(sysFolder);
+        auto nvapi64Path = sysPath / L"nvapi64.dll";
+
+        nvapiModule = NtdllProxy::LoadLibraryExW_Ldr(nvapi64Path.c_str(), NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
         loadedHere = true;
     }
 
@@ -1620,6 +1643,22 @@ void CheckForExcludedProcess()
     _passThruMode = false;
 }
 
+void CheckMemoryForProxies()
+{
+    FfxApiProxy::InitFfxDx12();
+    FfxApiProxy::InitFfxDx12_SR();
+    FfxApiProxy::InitFfxDx12_FG();
+    FfxApiProxy::InitFfxDx12_Denoiser();
+    FfxApiProxy::InitFfxDx12_Radiance();
+
+    XeSSProxy::InitXeSS();
+    XeSSProxy::InitXeSSDx11();
+    XeFGProxy::InitXeFG();
+    XeLLProxy::InitXeLL();
+
+    NVNGXProxy::InitNVNGX();
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     HMODULE handle = nullptr;
@@ -1645,6 +1684,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             CheckWorkingMode();
             break;
         }
+
+        // Main Opti DLL path
+        if (!Config::Instance()->MainDllPath.has_value())
+            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L"OptiScaler");
+
+        if (!Config::Instance()->PluginPath.has_value())
+            Config::Instance()->PluginPath.set_volatile_value(
+                std::filesystem::path(Config::Instance()->MainDllPath.value()) / L"plugins");
 
 #ifdef _DEBUG // VER_PRE_RELEASE
         // Enable file logging for pre builds
@@ -1674,11 +1721,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         else
             spdlog::warn("Can't read windows version");
 
-        spdlog::info("");
-
         spdlog::info("Config parameters:");
         for (const std::string& l : Config::Instance()->GetConfigLog())
             spdlog::info(l);
+
+        spdlog::info("");
+        spdlog::info("Setting DllPath to {}", wstring_to_string(Config::Instance()->MainDllPath.value()));
+        spdlog::info("");
 
 #ifdef VER_PRE_RELEASE
         spdlog::info("Pre-release build, disabling update checks");
@@ -1776,6 +1825,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         // Check for working mode and attach hooks
         spdlog::info("");
         CheckWorkingMode();
+        CheckMemoryForProxies();
 
         // OptiFG & Overlay Checks
         // TODO: Either FGInput == FGInput::Upscaler or FGOutput == FGOutput::FSRFG
@@ -1836,7 +1886,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
             // Try to load fakenvapi.dll as the main nvapi if not on Nvidia
             if (!State::Instance().isRunningOnNvidia && !Config::Instance()->NvapiDllPath.has_value())
-                Config::Instance()->NvapiDllPath.set_volatile_value(L"fakenvapi.dll");
+            {
+                auto path = std::filesystem::path(Config::Instance()->MainDllPath.value()) / L"fakenvapi.dll";
+                Config::Instance()->NvapiDllPath.set_volatile_value(path.wstring());
+            }
         }
 
         // Asi plugins

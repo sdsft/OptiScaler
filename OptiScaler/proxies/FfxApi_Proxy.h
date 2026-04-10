@@ -53,6 +53,7 @@ struct FfxModule
 {
     HMODULE dll = nullptr;
     feature_version version { 0, 0, 0 };
+    std::wstring filePath;
 
     bool skipCreateCalls = false;
     bool skipConfigureCalls = false;
@@ -60,6 +61,7 @@ struct FfxModule
     bool skipDispatchCalls = false;
 
     bool isLoader = false;
+    bool hooked = false;
 
     PfnFfxCreateContext CreateContext = nullptr;
     PfnFfxDestroyContext DestroyContext = nullptr;
@@ -76,8 +78,14 @@ class FfxApiProxy
     inline static FfxModule fg_dx12;
     inline static FfxModule denoiser_dx12;
     inline static FfxModule radiance_dx12;
-
     inline static FfxModule main_vk;
+
+    inline static FfxModule main_dx12_hooked;
+    inline static FfxModule upscaling_dx12_hooked;
+    inline static FfxModule fg_dx12_hooked;
+    inline static FfxModule denoiser_dx12_hooked;
+    inline static FfxModule radiance_dx12_hooked;
+    inline static FfxModule main_vk_hooked;
 
     inline static ankerl::unordered_dense::map<ffxContext, FFXStructType> contextToType;
 
@@ -115,6 +123,12 @@ class FfxApiProxy
     static HMODULE Dx12Module_FG() { return fg_dx12.dll; }
     static HMODULE Dx12Module_Denoiser() { return denoiser_dx12.dll; }
     static HMODULE Dx12Module_Radiance() { return radiance_dx12.dll; }
+
+    static std::wstring Dx12Module_Path() { return main_dx12.filePath; }
+    static std::wstring Dx12Module_SR_Path() { return upscaling_dx12.filePath; }
+    static std::wstring Dx12Module_FG_Path() { return fg_dx12.filePath; }
+    static std::wstring Dx12Module_Denoiser_Path() { return denoiser_dx12.filePath; }
+    static std::wstring Dx12Module_Radiance_Path() { return radiance_dx12.filePath; }
 
     static bool IsFGReady() { return (main_dx12.dll && !main_dx12.isLoader) || fg_dx12.dll != nullptr; }
     static bool IsSRReady() { return (main_dx12.dll && !main_dx12.isLoader) || upscaling_dx12.dll != nullptr; }
@@ -174,65 +188,61 @@ class FfxApiProxy
 
         spdlog::info("");
 
-        if (module != nullptr)
+        // This is module loaded by game, need to hook it to use inputs
+        if (module != nullptr && main_dx12_hooked.dll == nullptr)
         {
-            main_dx12.dll = module;
-
-            wchar_t path[MAX_PATH];
-            DWORD len = GetModuleFileNameW(module, path, MAX_PATH);
-            std::wstring fileName(path);
-            main_dx12.isLoader = IsLoader(fileName);
+            main_dx12_hooked.dll = module;
         }
 
+        // Try loading Opti's dlls first
         if (main_dx12.dll == nullptr)
         {
-            // Try new api first
             std::vector<std::wstring> dllNames = { L"amd_fidelityfx_loader_dx12.dll", L"amd_fidelityfx_dx12.dll" };
+
+            auto optiPath = Config::Instance()->MainDllPath.value();
 
             for (size_t i = 0; i < dllNames.size(); i++)
             {
                 LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
 
-                if (main_dx12.dll == nullptr && Config::Instance()->FfxDx12Path.has_value())
+                auto overridePath = Config::Instance()->FfxDx12Path.value_or(L"");
+
+                if (main_dx12_hooked.dll == nullptr)
                 {
-                    std::filesystem::path libPath(Config::Instance()->FfxDx12Path.value().c_str());
-                    std::wstring fileName;
-
-                    if (libPath.has_filename())
-                        fileName = libPath.c_str();
-                    else
-                        fileName = (libPath / dllNames[i]).c_str();
-
-                    main_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(fileName.c_str(), NULL, 0);
-
-                    if (main_dx12.dll != nullptr)
-                    {
-                        LOG_INFO("{} loaded from {}", wstring_to_string(dllNames[i]),
-                                 wstring_to_string(Config::Instance()->FfxDx12Path.value()));
-
-                        // hacky but works for now
-                        main_dx12.isLoader = IsLoader(fileName);
-                        break;
-                    }
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &main_dx12_hooked.dll, &main_dx12.dll);
+                }
+                else
+                {
+                    HMODULE memModule = nullptr;
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &main_dx12.dll);
                 }
 
-                if (main_dx12.dll == nullptr)
+                if (main_dx12.dll != nullptr)
                 {
-                    auto filePath = (Util::DllPath().parent_path() / dllNames[i]);
-                    main_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(filePath.c_str(), NULL, 0);
-
-                    if (main_dx12.dll != nullptr)
-                    {
-                        LOG_INFO("{} loaded from exe folder", wstring_to_string(dllNames[i]));
-
-                        // hacky but works for now
-                        main_dx12.isLoader = IsLoader(filePath.c_str());
-                        break;
-                    }
+                    break;
                 }
             }
         }
 
+        // Can't find Opti dlls, use just loaded module
+        if (main_dx12.dll == nullptr && main_dx12_hooked.dll != nullptr)
+        {
+            main_dx12 = main_dx12_hooked;
+        }
+
+        if (main_dx12.dll != nullptr)
+        {
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(main_dx12.dll, modulePath, MAX_PATH);
+            main_dx12.filePath = std::wstring(modulePath);
+
+            LOG_INFO("Loaded from {}", wstring_to_string(main_dx12.filePath));
+
+            // hacky but works for now
+            main_dx12.isLoader = IsLoader(main_dx12.filePath);
+        }
+
+        // Get methods of Opti's dlls
         if (main_dx12.dll != nullptr && main_dx12.Configure == nullptr)
         {
             main_dx12.Configure = (PfnFfxConfigure) KernelBaseProxy::GetProcAddress_()(main_dx12.dll, "ffxConfigure");
@@ -242,31 +252,56 @@ class FfxApiProxy
                 (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(main_dx12.dll, "ffxDestroyContext");
             main_dx12.Dispatch = (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(main_dx12.dll, "ffxDispatch");
             main_dx12.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(main_dx12.dll, "ffxQuery");
+        }
 
-            if (Config::Instance()->EnableFfxInputs.value_or_default() && main_dx12.CreateContext != nullptr)
-            {
-                DetourTransactionBegin();
-                DetourUpdateThread(GetCurrentThread());
+        // Get methods of game's dlls
+        if (main_dx12_hooked.dll != nullptr && main_dx12_hooked.Configure == nullptr)
+        {
+            main_dx12_hooked.Configure =
+                (PfnFfxConfigure) KernelBaseProxy::GetProcAddress_()(main_dx12_hooked.dll, "ffxConfigure");
+            main_dx12_hooked.CreateContext =
+                (PfnFfxCreateContext) KernelBaseProxy::GetProcAddress_()(main_dx12_hooked.dll, "ffxCreateContext");
+            main_dx12_hooked.DestroyContext =
+                (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(main_dx12_hooked.dll, "ffxDestroyContext");
+            main_dx12_hooked.Dispatch =
+                (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(main_dx12_hooked.dll, "ffxDispatch");
+            main_dx12_hooked.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(main_dx12_hooked.dll, "ffxQuery");
+        }
+        else if (main_dx12_hooked.Configure == nullptr)
+        {
+            main_dx12_hooked = main_dx12;
+        }
 
-                if (main_dx12.Configure != nullptr)
-                    DetourAttach(&(PVOID&) main_dx12.Configure, ffxConfigure_Dx12);
+        // Hook game's dlls
+        if (Config::Instance()->EnableFfxInputs.value_or_default() && main_dx12_hooked.dll != nullptr &&
+            main_dx12_hooked.CreateContext != nullptr && !main_dx12_hooked.hooked)
+        {
+            DetourTransactionBegin();
+            DetourUpdateThread(GetCurrentThread());
 
-                if (main_dx12.CreateContext != nullptr)
-                    DetourAttach(&(PVOID&) main_dx12.CreateContext, ffxCreateContext_Dx12);
+            if (main_dx12_hooked.Configure != nullptr)
+                DetourAttach(&(PVOID&) main_dx12_hooked.Configure, ffxConfigure_Dx12);
 
-                if (main_dx12.DestroyContext != nullptr)
-                    DetourAttach(&(PVOID&) main_dx12.DestroyContext, ffxDestroyContext_Dx12);
+            if (main_dx12_hooked.CreateContext != nullptr)
+                DetourAttach(&(PVOID&) main_dx12_hooked.CreateContext, ffxCreateContext_Dx12);
 
-                if (main_dx12.Dispatch != nullptr)
-                    DetourAttach(&(PVOID&) main_dx12.Dispatch, ffxDispatch_Dx12);
+            if (main_dx12_hooked.DestroyContext != nullptr)
+                DetourAttach(&(PVOID&) main_dx12_hooked.DestroyContext, ffxDestroyContext_Dx12);
 
-                if (main_dx12.Query != nullptr)
-                    DetourAttach(&(PVOID&) main_dx12.Query, ffxQuery_Dx12);
+            if (main_dx12_hooked.Dispatch != nullptr)
+                DetourAttach(&(PVOID&) main_dx12_hooked.Dispatch, ffxDispatch_Dx12);
 
-                State::Instance().fsrHooks = true;
+            if (main_dx12_hooked.Query != nullptr)
+                DetourAttach(&(PVOID&) main_dx12_hooked.Query, ffxQuery_Dx12);
 
-                DetourTransactionCommit();
-            }
+            DetourTransactionCommit();
+
+            // If we are hooking Opti's dlls then we need to use original method ptrs
+            if (main_dx12_hooked.dll == main_dx12.dll)
+                main_dx12 = main_dx12_hooked;
+
+            main_dx12_hooked.hooked = true;
+            State::Instance().fsrHooks = true;
         }
 
         InitFfxDx12_SR();
@@ -294,47 +329,56 @@ class FfxApiProxy
 
         spdlog::info("");
 
-        if (module != nullptr)
-            upscaling_dx12.dll = module;
+        // This is module loaded by game, need to hook it to use inputs
+        if (module != nullptr && upscaling_dx12_hooked.dll == nullptr)
+        {
+            upscaling_dx12_hooked.dll = module;
+        }
 
         if (upscaling_dx12.dll == nullptr)
         {
             // Try new api first
             std::vector<std::wstring> dllNames = { L"amd_fidelityfx_upscaler_dx12.dll" };
 
+            auto optiPath = Config::Instance()->MainDllPath.value();
+
             for (size_t i = 0; i < dllNames.size(); i++)
             {
                 LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
 
-                // if (upscaling_dx12.dll == nullptr && Config::Instance()->FfxDx12Path.has_value())
-                //{
-                //     std::filesystem::path libPath(Config::Instance()->FfxDx12Path.value().c_str());
+                auto overridePath = Config::Instance()->FfxDx12SRPath.value_or(L"");
 
-                //    if (libPath.has_filename())
-                //        upscaling_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(libPath.c_str(), NULL, 0);
-                //    else
-                //        upscaling_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr((libPath / dllNames[i]).c_str(), NULL, 0);
-
-                //    if (upscaling_dx12.dll != nullptr)
-                //    {
-                //        LOG_INFO("{} loaded from {}", wstring_to_string(dllNames[i]),
-                //                 wstring_to_string(Config::Instance()->FfxDx12Path.value()));
-                //        break;
-                //    }
-                //}
-
-                if (upscaling_dx12.dll == nullptr)
+                if (upscaling_dx12_hooked.dll == nullptr)
                 {
-                    upscaling_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(dllNames[i].c_str(), NULL, 0);
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &upscaling_dx12_hooked.dll,
+                                           &upscaling_dx12.dll);
+                }
+                else
+                {
+                    HMODULE memModule = nullptr;
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &upscaling_dx12.dll);
+                }
 
-                    if (upscaling_dx12.dll != nullptr)
-                    {
-                        LOG_INFO("{} loaded from exe folder", wstring_to_string(dllNames[i]));
-                        FSR4ModelSelection::Hook(upscaling_dx12.dll, FSR4Source::SDK);
-                        break;
-                    }
+                if (upscaling_dx12.dll != nullptr)
+                {
+                    break;
                 }
             }
+        }
+
+        // Can't find Opti dlls, use just module loaded by game
+        if (upscaling_dx12.dll == nullptr && upscaling_dx12_hooked.dll != nullptr)
+        {
+            upscaling_dx12 = upscaling_dx12_hooked;
+        }
+
+        if (upscaling_dx12.dll != nullptr)
+        {
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(upscaling_dx12.dll, modulePath, MAX_PATH);
+            upscaling_dx12.filePath = std::wstring(modulePath);
+
+            LOG_INFO("Loaded from {}", wstring_to_string(upscaling_dx12.filePath));
         }
 
         if (upscaling_dx12.dll != nullptr && upscaling_dx12.Configure == nullptr)
@@ -348,31 +392,54 @@ class FfxApiProxy
             upscaling_dx12.Dispatch =
                 (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(upscaling_dx12.dll, "ffxDispatch");
             upscaling_dx12.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(upscaling_dx12.dll, "ffxQuery");
+        }
 
-            if (Config::Instance()->EnableFfxInputs.value_or_default() && upscaling_dx12.CreateContext != nullptr)
-            {
-                DetourTransactionBegin();
-                DetourUpdateThread(GetCurrentThread());
+        if (upscaling_dx12_hooked.dll != nullptr && upscaling_dx12_hooked.Configure == nullptr)
+        {
+            upscaling_dx12_hooked.Configure =
+                (PfnFfxConfigure) KernelBaseProxy::GetProcAddress_()(upscaling_dx12_hooked.dll, "ffxConfigure");
+            upscaling_dx12_hooked.CreateContext =
+                (PfnFfxCreateContext) KernelBaseProxy::GetProcAddress_()(upscaling_dx12_hooked.dll, "ffxCreateContext");
+            upscaling_dx12_hooked.DestroyContext = (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(
+                upscaling_dx12_hooked.dll, "ffxDestroyContext");
+            upscaling_dx12_hooked.Dispatch =
+                (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(upscaling_dx12_hooked.dll, "ffxDispatch");
+            upscaling_dx12_hooked.Query =
+                (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(upscaling_dx12_hooked.dll, "ffxQuery");
+        }
+        else if (upscaling_dx12_hooked.Configure == nullptr)
+        {
+            upscaling_dx12_hooked = upscaling_dx12;
+        }
 
-                if (upscaling_dx12.Configure != nullptr)
-                    DetourAttach(&(PVOID&) upscaling_dx12.Configure, ffxConfigure_Dx12);
+        if (Config::Instance()->EnableFfxInputs.value_or_default() && upscaling_dx12_hooked.dll != nullptr &&
+            upscaling_dx12_hooked.CreateContext != nullptr && !upscaling_dx12_hooked.hooked)
+        {
+            DetourTransactionBegin();
+            DetourUpdateThread(GetCurrentThread());
 
-                if (upscaling_dx12.CreateContext != nullptr)
-                    DetourAttach(&(PVOID&) upscaling_dx12.CreateContext, ffxCreateContext_Dx12);
+            if (upscaling_dx12_hooked.Configure != nullptr)
+                DetourAttach(&(PVOID&) upscaling_dx12_hooked.Configure, ffxConfigure_Dx12);
 
-                if (upscaling_dx12.DestroyContext != nullptr)
-                    DetourAttach(&(PVOID&) upscaling_dx12.DestroyContext, ffxDestroyContext_Dx12);
+            if (upscaling_dx12_hooked.CreateContext != nullptr)
+                DetourAttach(&(PVOID&) upscaling_dx12_hooked.CreateContext, ffxCreateContext_Dx12);
 
-                if (upscaling_dx12.Dispatch != nullptr)
-                    DetourAttach(&(PVOID&) upscaling_dx12.Dispatch, ffxDispatch_Dx12);
+            if (upscaling_dx12_hooked.DestroyContext != nullptr)
+                DetourAttach(&(PVOID&) upscaling_dx12_hooked.DestroyContext, ffxDestroyContext_Dx12);
 
-                if (upscaling_dx12.Query != nullptr)
-                    DetourAttach(&(PVOID&) upscaling_dx12.Query, ffxQuery_Dx12);
+            if (upscaling_dx12_hooked.Dispatch != nullptr)
+                DetourAttach(&(PVOID&) upscaling_dx12_hooked.Dispatch, ffxDispatch_Dx12);
 
-                State::Instance().fsrHooks = true;
+            if (upscaling_dx12_hooked.Query != nullptr)
+                DetourAttach(&(PVOID&) upscaling_dx12_hooked.Query, ffxQuery_Dx12);
 
-                DetourTransactionCommit();
-            }
+            DetourTransactionCommit();
+
+            if (upscaling_dx12.dll == upscaling_dx12_hooked.dll)
+                upscaling_dx12 = upscaling_dx12_hooked;
+
+            upscaling_dx12_hooked.hooked = true;
+            State::Instance().fsrHooks = true;
         }
 
         bool loadResult = upscaling_dx12.CreateContext != nullptr;
@@ -393,46 +460,55 @@ class FfxApiProxy
 
         spdlog::info("");
 
-        if (module != nullptr)
-            fg_dx12.dll = module;
+        // This is module loaded by game, need to hook it to use inputs
+        if (module != nullptr && fg_dx12_hooked.dll == nullptr)
+        {
+            fg_dx12_hooked.dll = module;
+        }
 
         if (fg_dx12.dll == nullptr)
         {
             // Try new api first
             std::vector<std::wstring> dllNames = { L"amd_fidelityfx_framegeneration_dx12.dll" };
 
+            auto optiPath = Config::Instance()->MainDllPath.value();
+
             for (size_t i = 0; i < dllNames.size(); i++)
             {
                 LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
 
-                // if (fg_dx12.dll == nullptr && Config::Instance()->FfxDx12Path.has_value())
-                //{
-                //     std::filesystem::path libPath(Config::Instance()->FfxDx12Path.value().c_str());
+                auto overridePath = Config::Instance()->FfxDx12FGPath.value_or(L"");
 
-                //    if (libPath.has_filename())
-                //        fg_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(libPath.c_str(), NULL, 0);
-                //    else
-                //        fg_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr((libPath / dllNames[i]).c_str(), NULL, 0);
-
-                //    if (fg_dx12.dll != nullptr)
-                //    {
-                //        LOG_INFO("{} loaded from {}", wstring_to_string(dllNames[i]),
-                //                 wstring_to_string(Config::Instance()->FfxDx12Path.value()));
-                //        break;
-                //    }
-                //}
-
-                if (fg_dx12.dll == nullptr)
+                if (fg_dx12_hooked.dll == nullptr)
                 {
-                    fg_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(dllNames[i].c_str(), NULL, 0);
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &fg_dx12_hooked.dll, &fg_dx12.dll);
+                }
+                else
+                {
+                    HMODULE memModule = nullptr;
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &fg_dx12.dll);
+                }
 
-                    if (fg_dx12.dll != nullptr)
-                    {
-                        LOG_INFO("{} loaded from exe folder", wstring_to_string(dllNames[i]));
-                        break;
-                    }
+                if (fg_dx12.dll != nullptr)
+                {
+                    break;
                 }
             }
+        }
+
+        // Can't find Opti dlls, use just module loaded by game
+        if (fg_dx12.dll == nullptr && fg_dx12_hooked.dll != nullptr)
+        {
+            fg_dx12 = fg_dx12_hooked;
+        }
+
+        if (fg_dx12.dll != nullptr)
+        {
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(fg_dx12.dll, modulePath, MAX_PATH);
+            fg_dx12.filePath = std::wstring(modulePath);
+
+            LOG_INFO("Loaded from {}", wstring_to_string(fg_dx12.filePath));
         }
 
         if (fg_dx12.dll != nullptr && fg_dx12.Configure == nullptr)
@@ -444,31 +520,53 @@ class FfxApiProxy
                 (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(fg_dx12.dll, "ffxDestroyContext");
             fg_dx12.Dispatch = (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(fg_dx12.dll, "ffxDispatch");
             fg_dx12.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(fg_dx12.dll, "ffxQuery");
+        }
 
-            if (Config::Instance()->EnableFfxInputs.value_or_default() && fg_dx12.CreateContext != nullptr)
-            {
-                DetourTransactionBegin();
-                DetourUpdateThread(GetCurrentThread());
+        if (fg_dx12_hooked.dll != nullptr && fg_dx12_hooked.Configure == nullptr)
+        {
+            fg_dx12_hooked.Configure =
+                (PfnFfxConfigure) KernelBaseProxy::GetProcAddress_()(fg_dx12_hooked.dll, "ffxConfigure");
+            fg_dx12_hooked.CreateContext =
+                (PfnFfxCreateContext) KernelBaseProxy::GetProcAddress_()(fg_dx12_hooked.dll, "ffxCreateContext");
+            fg_dx12_hooked.DestroyContext =
+                (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(fg_dx12_hooked.dll, "ffxDestroyContext");
+            fg_dx12_hooked.Dispatch =
+                (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(fg_dx12_hooked.dll, "ffxDispatch");
+            fg_dx12_hooked.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(fg_dx12_hooked.dll, "ffxQuery");
+        }
+        else if (fg_dx12_hooked.Configure == nullptr)
+        {
+            fg_dx12_hooked = fg_dx12;
+        }
 
-                if (fg_dx12.Configure != nullptr)
-                    DetourAttach(&(PVOID&) fg_dx12.Configure, ffxConfigure_Dx12);
+        if (Config::Instance()->EnableFfxInputs.value_or_default() && fg_dx12_hooked.dll != nullptr &&
+            fg_dx12_hooked.CreateContext != nullptr && !fg_dx12_hooked.hooked)
+        {
+            DetourTransactionBegin();
+            DetourUpdateThread(GetCurrentThread());
 
-                if (fg_dx12.CreateContext != nullptr)
-                    DetourAttach(&(PVOID&) fg_dx12.CreateContext, ffxCreateContext_Dx12);
+            if (fg_dx12_hooked.Configure != nullptr)
+                DetourAttach(&(PVOID&) fg_dx12_hooked.Configure, ffxConfigure_Dx12);
 
-                if (fg_dx12.DestroyContext != nullptr)
-                    DetourAttach(&(PVOID&) fg_dx12.DestroyContext, ffxDestroyContext_Dx12);
+            if (fg_dx12_hooked.CreateContext != nullptr)
+                DetourAttach(&(PVOID&) fg_dx12_hooked.CreateContext, ffxCreateContext_Dx12);
 
-                if (fg_dx12.Dispatch != nullptr)
-                    DetourAttach(&(PVOID&) fg_dx12.Dispatch, ffxDispatch_Dx12);
+            if (fg_dx12_hooked.DestroyContext != nullptr)
+                DetourAttach(&(PVOID&) fg_dx12_hooked.DestroyContext, ffxDestroyContext_Dx12);
 
-                if (fg_dx12.Query != nullptr)
-                    DetourAttach(&(PVOID&) fg_dx12.Query, ffxQuery_Dx12);
+            if (fg_dx12_hooked.Dispatch != nullptr)
+                DetourAttach(&(PVOID&) fg_dx12_hooked.Dispatch, ffxDispatch_Dx12);
 
-                State::Instance().fsrHooks = true;
+            DetourTransactionCommit();
 
-                DetourTransactionCommit();
-            }
+            if (fg_dx12_hooked.Query != nullptr)
+                DetourAttach(&(PVOID&) fg_dx12_hooked.Query, ffxQuery_Dx12);
+
+            if (fg_dx12.dll == fg_dx12_hooked.dll)
+                fg_dx12 = fg_dx12_hooked;
+
+            fg_dx12_hooked.hooked = true;
+            State::Instance().fsrHooks = true;
         }
 
         bool loadResult = fg_dx12.CreateContext != nullptr;
@@ -489,46 +587,56 @@ class FfxApiProxy
 
         spdlog::info("");
 
-        if (module != nullptr)
-            denoiser_dx12.dll = module;
+        // This is module loaded by game, need to hook it to use inputs
+        if (module != nullptr && denoiser_dx12_hooked.dll == nullptr)
+        {
+            denoiser_dx12_hooked.dll = module;
+        }
 
         if (denoiser_dx12.dll == nullptr)
         {
             // Try new api first
             std::vector<std::wstring> dllNames = { L"amd_fidelityfx_denoiser_dx12.dll" };
 
+            auto optiPath = Config::Instance()->MainDllPath.value();
+
             for (size_t i = 0; i < dllNames.size(); i++)
             {
                 LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
 
-                // if (denoiser_dx12.dll == nullptr && Config::Instance()->FfxDx12Path.has_value())
-                //{
-                //     std::filesystem::path libPath(Config::Instance()->FfxDx12Path.value().c_str());
+                auto overridePath = Config::Instance()->FfxDx12RRPath.value_or(L"");
 
-                //    if (libPath.has_filename())
-                //        denoiser_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(libPath.c_str(), NULL, 0);
-                //    else
-                //        denoiser_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr((libPath / dllNames[i]).c_str(), NULL, 0);
-
-                //    if (denoiser_dx12.dll != nullptr)
-                //    {
-                //        LOG_INFO("{} loaded from {}", wstring_to_string(dllNames[i]),
-                //                 wstring_to_string(Config::Instance()->FfxDx12Path.value()));
-                //        break;
-                //    }
-                //}
-
-                if (denoiser_dx12.dll == nullptr)
+                if (denoiser_dx12_hooked.dll == nullptr)
                 {
-                    denoiser_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(dllNames[i].c_str(), NULL, 0);
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &denoiser_dx12_hooked.dll,
+                                           &denoiser_dx12.dll);
+                }
+                else
+                {
+                    HMODULE memModule = nullptr;
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &denoiser_dx12.dll);
+                }
 
-                    if (denoiser_dx12.dll != nullptr)
-                    {
-                        LOG_INFO("{} loaded from exe folder", wstring_to_string(dllNames[i]));
-                        break;
-                    }
+                if (denoiser_dx12.dll != nullptr)
+                {
+                    break;
                 }
             }
+        }
+
+        // Can't find Opti dlls, use just module loaded by game
+        if (denoiser_dx12.dll == nullptr && denoiser_dx12_hooked.dll != nullptr)
+        {
+            denoiser_dx12 = denoiser_dx12_hooked;
+        }
+
+        if (denoiser_dx12.dll != nullptr)
+        {
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(denoiser_dx12.dll, modulePath, MAX_PATH);
+            denoiser_dx12.filePath = std::wstring(modulePath);
+
+            LOG_INFO("Loaded from {}", wstring_to_string(denoiser_dx12.filePath));
         }
 
         if (denoiser_dx12.dll != nullptr && denoiser_dx12.Configure == nullptr)
@@ -542,31 +650,54 @@ class FfxApiProxy
             denoiser_dx12.Dispatch =
                 (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(denoiser_dx12.dll, "ffxDispatch");
             denoiser_dx12.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(denoiser_dx12.dll, "ffxQuery");
+        }
 
-            if (Config::Instance()->EnableFfxInputs.value_or_default() && denoiser_dx12.CreateContext != nullptr)
-            {
-                DetourTransactionBegin();
-                DetourUpdateThread(GetCurrentThread());
+        if (denoiser_dx12_hooked.dll != nullptr && denoiser_dx12_hooked.Configure == nullptr)
+        {
+            denoiser_dx12_hooked.Configure =
+                (PfnFfxConfigure) KernelBaseProxy::GetProcAddress_()(denoiser_dx12_hooked.dll, "ffxConfigure");
+            denoiser_dx12_hooked.CreateContext =
+                (PfnFfxCreateContext) KernelBaseProxy::GetProcAddress_()(denoiser_dx12_hooked.dll, "ffxCreateContext");
+            denoiser_dx12_hooked.DestroyContext = (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(
+                denoiser_dx12_hooked.dll, "ffxDestroyContext");
+            denoiser_dx12_hooked.Dispatch =
+                (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(denoiser_dx12_hooked.dll, "ffxDispatch");
+            denoiser_dx12_hooked.Query =
+                (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(denoiser_dx12_hooked.dll, "ffxQuery");
+        }
+        else if (denoiser_dx12_hooked.Configure == nullptr)
+        {
+            denoiser_dx12_hooked = denoiser_dx12;
+        }
 
-                if (denoiser_dx12.Configure != nullptr)
-                    DetourAttach(&(PVOID&) denoiser_dx12.Configure, ffxConfigure_Dx12);
+        if (Config::Instance()->EnableFfxInputs.value_or_default() && denoiser_dx12_hooked.dll != nullptr &&
+            denoiser_dx12_hooked.CreateContext != nullptr && !denoiser_dx12_hooked.hooked)
+        {
+            DetourTransactionBegin();
+            DetourUpdateThread(GetCurrentThread());
 
-                if (denoiser_dx12.CreateContext != nullptr)
-                    DetourAttach(&(PVOID&) denoiser_dx12.CreateContext, ffxCreateContext_Dx12);
+            if (denoiser_dx12.Configure != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12.Configure, ffxConfigure_Dx12);
 
-                if (denoiser_dx12.DestroyContext != nullptr)
-                    DetourAttach(&(PVOID&) denoiser_dx12.DestroyContext, ffxDestroyContext_Dx12);
+            if (denoiser_dx12.CreateContext != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12.CreateContext, ffxCreateContext_Dx12);
 
-                if (denoiser_dx12.Dispatch != nullptr)
-                    DetourAttach(&(PVOID&) denoiser_dx12.Dispatch, ffxDispatch_Dx12);
+            if (denoiser_dx12.DestroyContext != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12.DestroyContext, ffxDestroyContext_Dx12);
 
-                if (denoiser_dx12.Query != nullptr)
-                    DetourAttach(&(PVOID&) denoiser_dx12.Query, ffxQuery_Dx12);
+            if (denoiser_dx12.Dispatch != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12.Dispatch, ffxDispatch_Dx12);
 
-                State::Instance().fsrHooks = true;
+            if (denoiser_dx12.Query != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12.Query, ffxQuery_Dx12);
 
-                DetourTransactionCommit();
-            }
+            DetourTransactionCommit();
+
+            if (denoiser_dx12.dll == denoiser_dx12_hooked.dll)
+                denoiser_dx12 = denoiser_dx12_hooked;
+
+            denoiser_dx12_hooked.hooked = true;
+            State::Instance().fsrHooks = true;
         }
 
         bool loadResult = denoiser_dx12.CreateContext != nullptr;
@@ -587,46 +718,56 @@ class FfxApiProxy
 
         spdlog::info("");
 
-        if (module != nullptr)
+        // This is module loaded by game, need to hook it to use inputs
+        if (module != nullptr && radiance_dx12_hooked.dll == nullptr)
+        {
             radiance_dx12.dll = module;
+        }
 
         if (radiance_dx12.dll == nullptr)
         {
             // Try new api first
             std::vector<std::wstring> dllNames = { L"amd_fidelityfx_radiancecache_dx12.dll" };
 
+            auto optiPath = Config::Instance()->MainDllPath.value();
+
             for (size_t i = 0; i < dllNames.size(); i++)
             {
                 LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
 
-                // if (radiance_dx12.dll == nullptr && Config::Instance()->FfxDx12Path.has_value())
-                //{
-                //     std::filesystem::path libPath(Config::Instance()->FfxDx12Path.value().c_str());
+                auto overridePath = Config::Instance()->FfxDx12RCPath.value_or(L"");
 
-                //    if (libPath.has_filename())
-                //        radiance_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(libPath.c_str(), NULL, 0);
-                //    else
-                //        radiance_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr((libPath / dllNames[i]).c_str(), NULL, 0);
-
-                //    if (radiance_dx12.dll != nullptr)
-                //    {
-                //        LOG_INFO("{} loaded from {}", wstring_to_string(dllNames[i]),
-                //                 wstring_to_string(Config::Instance()->FfxDx12Path.value()));
-                //        break;
-                //    }
-                //}
-
-                if (radiance_dx12.dll == nullptr)
+                if (radiance_dx12_hooked.dll == nullptr)
                 {
-                    radiance_dx12.dll = NtdllProxy::LoadLibraryExW_Ldr(dllNames[i].c_str(), NULL, 0);
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &radiance_dx12_hooked.dll,
+                                           &radiance_dx12.dll);
+                }
+                else
+                {
+                    HMODULE memModule = nullptr;
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &radiance_dx12.dll);
+                }
 
-                    if (radiance_dx12.dll != nullptr)
-                    {
-                        LOG_INFO("{} loaded from exe folder", wstring_to_string(dllNames[i]));
-                        break;
-                    }
+                if (radiance_dx12.dll != nullptr)
+                {
+                    break;
                 }
             }
+        }
+
+        // Can't find Opti dlls, use just module loaded by game
+        if (radiance_dx12.dll == nullptr && radiance_dx12_hooked.dll != nullptr)
+        {
+            radiance_dx12 = radiance_dx12_hooked;
+        }
+
+        if (radiance_dx12.dll != nullptr)
+        {
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(denoiser_dx12.dll, modulePath, MAX_PATH);
+            radiance_dx12.filePath = std::wstring(modulePath);
+
+            LOG_INFO("Loaded from {}", wstring_to_string(radiance_dx12.filePath));
         }
 
         if (radiance_dx12.dll != nullptr && radiance_dx12.Configure == nullptr)
@@ -640,31 +781,54 @@ class FfxApiProxy
             radiance_dx12.Dispatch =
                 (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(radiance_dx12.dll, "ffxDispatch");
             radiance_dx12.Query = (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(radiance_dx12.dll, "ffxQuery");
+        }
 
-            if (Config::Instance()->EnableFfxInputs.value_or_default() && radiance_dx12.CreateContext != nullptr)
-            {
-                DetourTransactionBegin();
-                DetourUpdateThread(GetCurrentThread());
+        if (radiance_dx12_hooked.dll != nullptr && radiance_dx12_hooked.Configure == nullptr)
+        {
+            radiance_dx12_hooked.Configure =
+                (PfnFfxConfigure) KernelBaseProxy::GetProcAddress_()(radiance_dx12_hooked.dll, "ffxConfigure");
+            radiance_dx12_hooked.CreateContext =
+                (PfnFfxCreateContext) KernelBaseProxy::GetProcAddress_()(radiance_dx12_hooked.dll, "ffxCreateContext");
+            radiance_dx12_hooked.DestroyContext = (PfnFfxDestroyContext) KernelBaseProxy::GetProcAddress_()(
+                radiance_dx12_hooked.dll, "ffxDestroyContext");
+            radiance_dx12_hooked.Dispatch =
+                (PfnFfxDispatch) KernelBaseProxy::GetProcAddress_()(radiance_dx12_hooked.dll, "ffxDispatch");
+            radiance_dx12_hooked.Query =
+                (PfnFfxQuery) KernelBaseProxy::GetProcAddress_()(radiance_dx12_hooked.dll, "ffxQuery");
+        }
+        else if (radiance_dx12_hooked.Configure == nullptr)
+        {
+            radiance_dx12_hooked = radiance_dx12;
+        }
 
-                if (radiance_dx12.Configure != nullptr)
-                    DetourAttach(&(PVOID&) radiance_dx12.Configure, ffxConfigure_Dx12);
+        if (Config::Instance()->EnableFfxInputs.value_or_default() && radiance_dx12_hooked.dll != nullptr &&
+            radiance_dx12_hooked.CreateContext != nullptr && !radiance_dx12_hooked.hooked)
+        {
+            DetourTransactionBegin();
+            DetourUpdateThread(GetCurrentThread());
 
-                if (radiance_dx12.CreateContext != nullptr)
-                    DetourAttach(&(PVOID&) radiance_dx12.CreateContext, ffxCreateContext_Dx12);
+            if (radiance_dx12_hooked.Configure != nullptr)
+                DetourAttach(&(PVOID&) radiance_dx12_hooked.Configure, ffxConfigure_Dx12);
 
-                if (radiance_dx12.DestroyContext != nullptr)
-                    DetourAttach(&(PVOID&) radiance_dx12.DestroyContext, ffxDestroyContext_Dx12);
+            if (radiance_dx12_hooked.CreateContext != nullptr)
+                DetourAttach(&(PVOID&) radiance_dx12_hooked.CreateContext, ffxCreateContext_Dx12);
 
-                if (radiance_dx12.Dispatch != nullptr)
-                    DetourAttach(&(PVOID&) radiance_dx12.Dispatch, ffxDispatch_Dx12);
+            if (radiance_dx12_hooked.DestroyContext != nullptr)
+                DetourAttach(&(PVOID&) radiance_dx12_hooked.DestroyContext, ffxDestroyContext_Dx12);
 
-                if (radiance_dx12.Query != nullptr)
-                    DetourAttach(&(PVOID&) radiance_dx12.Query, ffxQuery_Dx12);
+            if (radiance_dx12_hooked.Dispatch != nullptr)
+                DetourAttach(&(PVOID&) radiance_dx12_hooked.Dispatch, ffxDispatch_Dx12);
 
-                State::Instance().fsrHooks = true;
+            if (radiance_dx12_hooked.Query != nullptr)
+                DetourAttach(&(PVOID&) radiance_dx12_hooked.Query, ffxQuery_Dx12);
 
-                DetourTransactionCommit();
-            }
+            DetourTransactionCommit();
+
+            if (radiance_dx12.dll == radiance_dx12_hooked.dll)
+                radiance_dx12 = radiance_dx12_hooked;
+
+            radiance_dx12_hooked.hooked = true;
+            State::Instance().fsrHooks = true;
         }
 
         bool loadResult = radiance_dx12.CreateContext != nullptr;
@@ -1110,6 +1274,7 @@ class FfxApiProxy
     }
 
     static HMODULE VkModule() { return main_vk.dll; }
+    static std::wstring VkModule_Path() { return main_vk.filePath; }
 
     static bool InitFfxVk(HMODULE module = nullptr)
     {
@@ -1119,33 +1284,46 @@ class FfxApiProxy
 
         spdlog::info("");
 
-        LOG_DEBUG("Loading amd_fidelityfx_vk.dll methods");
-
         if (module != nullptr)
             main_vk.dll = module;
 
-        if (main_vk.dll == nullptr && Config::Instance()->FfxVkPath.has_value())
+        if (main_vk.dll == nullptr)
         {
-            std::filesystem::path libPath(Config::Instance()->FfxVkPath.value().c_str());
+            // Try new api first
+            std::vector<std::wstring> dllNames = { L"amd_fidelityfx_vk.dll" };
 
-            if (libPath.has_filename())
-                main_vk.dll = NtdllProxy::LoadLibraryExW_Ldr(libPath.c_str(), NULL, 0);
-            else
-                main_vk.dll = NtdllProxy::LoadLibraryExW_Ldr((libPath / L"amd_fidelityfx_vk.dll").c_str(), NULL, 0);
+            auto optiPath = Config::Instance()->MainDllPath.value();
 
-            if (main_vk.dll != nullptr)
+            for (size_t i = 0; i < dllNames.size(); i++)
             {
-                LOG_INFO("amd_fidelityfx_vk.dll loaded from {0}",
-                         wstring_to_string(Config::Instance()->FfxVkPath.value()));
+                LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
+
+                auto overridePath = Config::Instance()->FfxVkPath.value_or(L"");
+
+                if (main_vk_hooked.dll == nullptr)
+                {
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &main_vk_hooked.dll, &main_vk.dll);
+                }
+                else
+                {
+                    HMODULE memModule = nullptr;
+                    Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &main_vk.dll);
+                }
+
+                if (main_vk.dll != nullptr)
+                {
+                    break;
+                }
             }
         }
 
-        if (main_vk.dll == nullptr)
+        if (main_vk.dll != nullptr)
         {
-            main_vk.dll = NtdllProxy::LoadLibraryExW_Ldr(L"amd_fidelityfx_vk.dll", NULL, 0);
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(main_vk.dll, modulePath, MAX_PATH);
+            main_vk.filePath = std::wstring(modulePath);
 
-            if (main_vk.dll != nullptr)
-                LOG_INFO("amd_fidelityfx_vk.dll loaded from exe folder");
+            LOG_INFO("Loaded from {}", wstring_to_string(main_vk.filePath));
         }
 
         if (main_vk.dll != nullptr && main_vk.CreateContext == nullptr)

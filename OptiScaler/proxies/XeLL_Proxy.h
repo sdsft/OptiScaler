@@ -32,6 +32,7 @@ class XeLLProxy
 {
   private:
     inline static HMODULE _dll = nullptr;
+    inline static std::wstring _dllPath;
 
     inline static feature_version _xellVersion {};
 
@@ -137,6 +138,7 @@ class XeLLProxy
 
   public:
     static HMODULE Module() { return _dll; }
+    static std::wstring Module_Path() { return _dllPath; }
 
     static bool InitXeLL()
     {
@@ -145,39 +147,34 @@ class XeLLProxy
 
         HMODULE mainModule = nullptr;
 
-        do
+        std::vector<std::wstring> dllNames = { L"libxell.dll" };
+
+        auto optiPath = Config::Instance()->MainDllPath.value();
+
+        for (size_t i = 0; i < dllNames.size(); i++)
         {
-            mainModule = GetModuleHandle(L"libxell.dll");
+            LOG_DEBUG("Trying to load {}", wstring_to_string(dllNames[i]));
+
+            auto overridePath = Config::Instance()->XeLLLibrary.value_or(L"");
+
+            HMODULE memModule = nullptr;
+            Util::LoadProxyLibrary(dllNames[i], optiPath, overridePath, &memModule, &mainModule);
+
             if (mainModule != nullptr)
             {
-                _dll = mainModule;
                 break;
             }
-
-            auto dllPath = Util::DllPath();
-            std::wstring libraryName = L"libxell.dll";
-
-            // we would like to prioritize file pointed at ini
-            // if (Config::Instance()->XeSSLibrary.has_value())
-            //{
-            //    std::filesystem::path cfgPath(Config::Instance()->XeSSLibrary.value().c_str());
-            //    LOG_INFO(L"Trying to load libxell.dll from ini path: {}", cfgPath.wstring());
-
-            //    cfgPath = cfgPath / libraryName;
-            //    mainModule = KernelBaseProxy::LoadLibraryExW_()(cfgPath.c_str(), NULL, 0);
-            //}
-
-            if (mainModule == nullptr)
-            {
-                std::filesystem::path libXeLLPath = dllPath.parent_path() / libraryName;
-                LOG_INFO(L"Trying to load libxell.dll from dll path: {}", libXeLLPath.wstring());
-                mainModule = NtdllProxy::LoadLibraryExW_Ldr(libXeLLPath.c_str(), NULL, 0);
-            }
-
-        } while (false);
+        }
 
         if (mainModule != nullptr)
+        {
+            wchar_t modulePath[MAX_PATH];
+            DWORD len = GetModuleFileNameW(mainModule, modulePath, MAX_PATH);
+            _dllPath = std::wstring(modulePath);
+
+            LOG_INFO("Loaded from {}", wstring_to_string(_dllPath));
             return HookXeLL(mainModule);
+        }
 
         return false;
     }
