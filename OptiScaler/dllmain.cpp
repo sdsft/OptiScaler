@@ -1250,7 +1250,7 @@ static void CheckQuirks()
 
     // Apply config-level quirks
     if (quirks & GameQuirk::DisableHudfix && Config::Instance()->FGInput.value_or_default() == FGInput::Upscaler)
-        Config::Instance()->FGHUDFix.set_volatile_value(false);
+        Config::Instance()->FGDisableHUDFix.set_volatile_value(true);
 
     if (quirks & GameQuirk::DisableFSR3Inputs && !Config::Instance()->EnableFsr3Inputs.has_value())
         Config::Instance()->EnableFsr3Inputs.set_volatile_value(false);
