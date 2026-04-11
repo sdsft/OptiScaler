@@ -1687,7 +1687,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         // Main Opti DLL path
         if (!Config::Instance()->MainDllPath.has_value())
-            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L"OptiScaler");
+            Config::Instance()->MainDllPath.set_volatile_value(Util::ExePath().parent_path() / L".");
 
         if (!Config::Instance()->PluginPath.has_value())
             Config::Instance()->PluginPath.set_volatile_value(
