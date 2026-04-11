@@ -611,11 +611,11 @@ void Util::LoadProxyLibrary(const std::wstring& name, const std::wstring& optiPa
     {
         auto path = std::filesystem::path(overridePath);
 
-        if (!path.has_filename())
-            path = path / name;
-
         if (std::filesystem::exists(path))
         {
+            if (std::filesystem::is_directory(path))
+                path = path / name;
+
             result = NtdllProxy::LoadLibraryExW_Ldr(path.c_str(), NULL, NULL);
 
             if (result != nullptr && result != dllModule)
@@ -629,10 +629,12 @@ void Util::LoadProxyLibrary(const std::wstring& name, const std::wstring& optiPa
     if (optiPath.size() > 0 && *loadedModule == nullptr)
     {
         auto path = std::filesystem::path(optiPath);
-        path = path / name;
 
         if (std::filesystem::exists(path))
         {
+            if (std::filesystem::is_directory(path))
+                path = path / name;
+
             result = NtdllProxy::LoadLibraryExW_Ldr(path.c_str(), NULL, NULL);
 
             if (result != nullptr && result != dllModule)
