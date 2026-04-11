@@ -428,12 +428,14 @@ class NVNGXProxy
 
         LOG_INFO("");
 
+        ScopedSkipDxgiLoadChecks scopedSkipDxgiLoadChecks {};
+
         if (nvngxModule != nullptr && _module.dll == nullptr)
         {
             _module.dll = nvngxModule;
         }
 
-        std::vector<std::wstring> dllNames = { L"nvngx.dll", L"_nvngx.dll" };
+        std::vector<std::wstring> dllNames = { L"_nvngx.dll", L"nvngx.dll" };
 
         auto optiPath = Config::Instance()->MainDllPath.value();
         auto overridePath = Config::Instance()->NvngxPath.value_or(L"");
@@ -459,10 +461,7 @@ class NVNGXProxy
             auto regNGXCorePath = Util::NvngxPath();
             if (regNGXCorePath.has_value())
             {
-                if (regNGXCorePath.value().has_filename())
-                    overridePath = regNGXCorePath.value().parent_path();
-                else
-                    overridePath = regNGXCorePath.value();
+                overridePath = regNGXCorePath.value();
 
                 for (size_t i = 0; i < dllNames.size(); i++)
                 {
@@ -488,8 +487,10 @@ class NVNGXProxy
             LOG_INFO("Loaded from {}", wstring_to_string(_module.filePath));
         }
 
-        if (_module.dll != nullptr && _module.D3D11_CreateFeature == nullptr)
+        if (_module.dll != nullptr && _module.D3D12_Init_ProjectID == nullptr)
         {
+            LOG_INFO("Getting nvngx method addresses");
+
             HookNgxApi(_module.dll);
 
             _module.D3D11_Init =
@@ -602,8 +603,6 @@ class NVNGXProxy
             _module.UpdateFeature =
                 (PFN_UpdateFeature) KernelBaseProxy::GetProcAddress_()(_module.dll, "NVSDK_NGX_UpdateFeature");
         }
-
-        LOG_INFO("getting nvngx method addresses");
     }
 
     static void GetFeatureCommonInfo(NVSDK_NGX_FeatureCommonInfo* fcInfo)
