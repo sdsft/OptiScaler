@@ -628,12 +628,16 @@ inline static VkResult hkvkEnumerateDeviceExtensionProperties(VkPhysicalDevice p
     {
         vkEnumerateDeviceExtensionPropertiesListed = true;
 
+        auto minusCount = 5;
+        if (State::Instance().activeFgInput == FGInput::DLSSG || State::Instance().activeFgInput == FGInput::Nukems)
+            minusCount = 7;
+
         LOG_DEBUG("Extensions returned:");
         for (uint32_t i = 0; i < *pPropertyCount; i++)
         {
             LOG_DEBUG("  {}", pProperties[i].extensionName);
 
-            if (i < (*pPropertyCount - 5))
+            if (!State::Instance().skipSpoofing && i < (*pPropertyCount - minusCount))
                 vkDeviceExtensions.insert_or_assign(std::string(pProperties[i].extensionName), true);
         }
     }
