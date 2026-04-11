@@ -161,7 +161,7 @@ static void RunAgilityUpgrade(HMODULE dx12Module)
             {
                 std::wstring widePath = Config::Instance()->MainDllPath.value();
                 widePath = std::filesystem::relative(widePath, Util::ExePath().parent_path());
-                widePath = widePath + L"\\";
+                widePath = widePath + L"\\D3D12_OptiScaler\\";
 
                 // Properly convert wstring → string
                 int size = WideCharToMultiByte(CP_UTF8, 0, widePath.c_str(), -1, nullptr, 0, nullptr, nullptr);
