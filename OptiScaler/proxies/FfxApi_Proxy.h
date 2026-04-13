@@ -676,20 +676,20 @@ class FfxApiProxy
             DetourTransactionBegin();
             DetourUpdateThread(GetCurrentThread());
 
-            if (denoiser_dx12.Configure != nullptr)
-                DetourAttach(&(PVOID&) denoiser_dx12.Configure, ffxConfigure_Dx12);
+            if (denoiser_dx12_hooked.Configure != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12_hooked.Configure, ffxConfigure_Dx12);
 
-            if (denoiser_dx12.CreateContext != nullptr)
-                DetourAttach(&(PVOID&) denoiser_dx12.CreateContext, ffxCreateContext_Dx12);
+            if (denoiser_dx12_hooked.CreateContext != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12_hooked.CreateContext, ffxCreateContext_Dx12);
 
-            if (denoiser_dx12.DestroyContext != nullptr)
-                DetourAttach(&(PVOID&) denoiser_dx12.DestroyContext, ffxDestroyContext_Dx12);
+            if (denoiser_dx12_hooked.DestroyContext != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12_hooked.DestroyContext, ffxDestroyContext_Dx12);
 
-            if (denoiser_dx12.Dispatch != nullptr)
-                DetourAttach(&(PVOID&) denoiser_dx12.Dispatch, ffxDispatch_Dx12);
+            if (denoiser_dx12_hooked.Dispatch != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12_hooked.Dispatch, ffxDispatch_Dx12);
 
-            if (denoiser_dx12.Query != nullptr)
-                DetourAttach(&(PVOID&) denoiser_dx12.Query, ffxQuery_Dx12);
+            if (denoiser_dx12_hooked.Query != nullptr)
+                DetourAttach(&(PVOID&) denoiser_dx12_hooked.Query, ffxQuery_Dx12);
 
             DetourTransactionCommit();
 
@@ -890,6 +890,12 @@ class FfxApiProxy
         if (main_dx12.version.major == 0 && fg_dx12.Query != nullptr)
             main_dx12.version = VersionDx12_FG();
 
+        if (denoiser_dx12.version.major == 0 && denoiser_dx12.Query != nullptr)
+            denoiser_dx12.version = VersionDx12_RR();
+
+        if (radiance_dx12.version.major == 0 && radiance_dx12.Query != nullptr)
+            radiance_dx12.version = VersionDx12_RC();
+
         return main_dx12.version;
     }
 
@@ -989,6 +995,104 @@ class FfxApiProxy
         }
 
         return fg_dx12.version;
+    }
+
+    static feature_version VersionDx12_RR()
+    {
+        if (denoiser_dx12.Query == nullptr)
+            return VersionDx12();
+
+        if (denoiser_dx12.version.major == 0)
+        {
+            ffxQueryDescGetVersions versionQuery {};
+            versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
+            versionQuery.createDescType = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
+            uint64_t versionCount = 0;
+            versionQuery.outputCount = &versionCount;
+
+            auto queryResult = denoiser_dx12.Query(nullptr, &versionQuery.header);
+
+            // get number of versions for allocation
+            if (versionCount > 0 && queryResult == FFX_API_RETURN_OK)
+            {
+
+                std::vector<uint64_t> versionIds;
+                std::vector<const char*> versionNames;
+                versionIds.resize(versionCount);
+                versionNames.resize(versionCount);
+                versionQuery.versionIds = versionIds.data();
+                versionQuery.versionNames = versionNames.data();
+
+                // fill version ids and names arrays.
+                queryResult = denoiser_dx12.Query(nullptr, &versionQuery.header);
+
+                if (queryResult == FFX_API_RETURN_OK)
+                {
+                    parse_version(versionNames[0], &denoiser_dx12.version);
+                    LOG_INFO("FfxApi Dx12 SR version: {}.{}.{}", denoiser_dx12.version.major,
+                             denoiser_dx12.version.minor, denoiser_dx12.version.patch);
+                }
+                else
+                {
+                    LOG_WARN("main_dx12.Query 2 result: {}", (UINT) queryResult);
+                }
+            }
+            else
+            {
+                LOG_WARN("main_dx12.Query result: {}", (UINT) queryResult);
+            }
+        }
+
+        return denoiser_dx12.version;
+    }
+
+    static feature_version VersionDx12_RC()
+    {
+        if (radiance_dx12.Query == nullptr)
+            return VersionDx12();
+
+        if (radiance_dx12.version.major == 0)
+        {
+            ffxQueryDescGetVersions versionQuery {};
+            versionQuery.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
+            versionQuery.createDescType = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
+            uint64_t versionCount = 0;
+            versionQuery.outputCount = &versionCount;
+
+            auto queryResult = radiance_dx12.Query(nullptr, &versionQuery.header);
+
+            // get number of versions for allocation
+            if (versionCount > 0 && queryResult == FFX_API_RETURN_OK)
+            {
+
+                std::vector<uint64_t> versionIds;
+                std::vector<const char*> versionNames;
+                versionIds.resize(versionCount);
+                versionNames.resize(versionCount);
+                versionQuery.versionIds = versionIds.data();
+                versionQuery.versionNames = versionNames.data();
+
+                // fill version ids and names arrays.
+                queryResult = radiance_dx12.Query(nullptr, &versionQuery.header);
+
+                if (queryResult == FFX_API_RETURN_OK)
+                {
+                    parse_version(versionNames[0], &radiance_dx12.version);
+                    LOG_INFO("FfxApi Dx12 SR version: {}.{}.{}", radiance_dx12.version.major,
+                             radiance_dx12.version.minor, radiance_dx12.version.patch);
+                }
+                else
+                {
+                    LOG_WARN("main_dx12.Query 2 result: {}", (UINT) queryResult);
+                }
+            }
+            else
+            {
+                LOG_WARN("main_dx12.Query result: {}", (UINT) queryResult);
+            }
+        }
+
+        return radiance_dx12.version;
     }
 
     static ffxReturnCode_t D3D12_CreateContext(ffxContext* context, ffxCreateContextDescHeader* desc,
