@@ -402,6 +402,7 @@ static const QuirkEntry quirkTable[] = {
     QUIRK_ENTRY_UE(mechwarrior, GameQuirk::ForceUnrealEngine),
     QUIRK_ENTRY_UE(ghostrunner, GameQuirk::ForceUnrealEngine),
     QUIRK_ENTRY_UE(ghostrunner2, GameQuirk::ForceUnrealEngine),
+    QUIRK_ENTRY("soulstice.exe", GameQuirk::ForceUnrealEngine, GameQuirk::ForceAutoExposure),
 
     // VULKAN
     // ------
