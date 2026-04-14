@@ -285,7 +285,7 @@ bool Hudfix_Dx12::CheckCapture()
         LOG_TRACE("frameCounter: {}, _captureCounter: {}, Limit: {}", State::Instance().currentFeature->FrameCount(),
                   _captureCounter[fIndex], Config::Instance()->FGHUDLimit.value_or_default());
 
-        if (_captureCounter[fIndex] > Config::Instance()->FGHUDLimit.value_or_default())
+        if (_captureCounter[fIndex] < Config::Instance()->FGHUDLimit.value_or_default())
             return false;
     }
 
