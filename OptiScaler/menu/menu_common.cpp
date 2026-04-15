@@ -2247,10 +2247,16 @@ bool MenuCommon::RenderMenu()
                 }
                 else if (!versionStatus.error.empty())
                 {
-                    ImGui::Spacing();
-                    ImGui::TextColored(ImVec4(1.f, 0.4f, 0.f, 1.f), "%s", versionStatus.error.c_str());
-                    ImGui::Spacing();
+                    LOG_ERROR("Version check failed: {0}", versionStatus.error);
+                    versionStatus.error.clear();
                 }
+                // Disabled error message
+                // else if (!versionStatus.error.empty())
+                //{
+                //    ImGui::Spacing();
+                //    ImGui::TextColored(ImVec4(1.f, 0.4f, 0.f, 1.f), "%s", versionStatus.error.c_str());
+                //    ImGui::Spacing();
+                //}
             }
 
             // No active upscaler message
@@ -4003,6 +4009,8 @@ bool MenuCommon::RenderMenu()
 
                                 if (ImGui::Button("Reset List"))
                                 {
+                                    LOG_DEBUG("Resetting captured resource list");
+
                                     state.FGresetCapturedResources = true;
                                     state.FGonlyUseCapturedResources = false;
                                 }
@@ -5919,14 +5927,21 @@ bool MenuCommon::RenderMenu()
                                 text = StrFmt("Enable##%d", btnCount);
 
                             if (ImGui::Button(text.c_str()))
+                            {
+                                LOG_DEBUG("Hudless {:X}: {}", (size_t) it->first,
+                                          it->second.enabled ? "Disabling" : "Enabling");
                                 it->second.enabled = !it->second.enabled;
+                            }
                         }
 
                         ImGui::EndTable();
                     }
 
                     if (ImGui::Button("Clear##4"))
+                    {
+                        LOG_DEBUG("Clearing captured hudless resources");
                         state.ClearCapturedHudlesses = true;
+                    }
 
                     ImGui::SameLine(0.0f, 8.0f);
 
