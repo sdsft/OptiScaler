@@ -974,6 +974,7 @@ ULONG ResTrack_Dx12::hkRelease(ID3D12Resource* This)
         {
             toClean = _trackedResources[This]; // Copy vector
             _trackedResources.erase(This);
+            State::Instance().CapturedHudlesses.erase(This);
         }
     }
 
@@ -987,7 +988,6 @@ ULONG ResTrack_Dx12::hkRelease(ID3D12Resource* This)
         }
     }
 
-    State::Instance().CapturedHudlesses.erase(This);
     return o_Release(This);
 }
 

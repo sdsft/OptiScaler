@@ -495,6 +495,7 @@ void Hudfix_Dx12::UpscaleStart()
 
     if (State::Instance().ClearCapturedHudlesses)
     {
+        LOG_DEBUG("ClearCapturedHudlesses");
         State::Instance().ClearCapturedHudlesses = false;
         State::Instance().CapturedHudlesses.clear();
     }
@@ -584,13 +585,17 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
             break;
         }
 
-        auto hudlessIt = s.CapturedHudlesses.find(resource->buffer);
-        CapturedHudlessInfo* capturedHudlessInfo =
-            (hudlessIt != s.CapturedHudlesses.end()) ? &hudlessIt->second : nullptr;
-        if (capturedHudlessInfo != nullptr && !capturedHudlessInfo->enabled)
+        CapturedHudlessInfo* capturedHudlessInfo = nullptr;
+        auto it = s.CapturedHudlesses.find(resource->buffer);
+        if (it != s.CapturedHudlesses.end())
         {
-            LOG_DEBUG("Skipping {:X}, disabled from captured hudless list!", (size_t) resource->buffer);
-            break;
+            capturedHudlessInfo = &it->second;
+
+            if (!capturedHudlessInfo->enabled)
+            {
+                LOG_DEBUG("Skipping {:X}, disabled from captured hudless list!", (size_t) resource->buffer);
+                break;
+            }
         }
 
         // Prevent double capture
@@ -700,7 +705,6 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
         if (_commandQueue == nullptr && !CreateObjects())
         {
             LOG_WARN("Can't create command queue!");
-            _captureCounter[fIndex]--;
             return false;
         }
 
@@ -730,7 +734,6 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
             else
             {
                 LOG_WARN("Can't create _captureBuffer!");
-                _captureCounter[fIndex]--;
                 break;
             }
         }
@@ -789,7 +792,6 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
             else
             {
                 LOG_WARN("Can't create _captureBuffer!");
-                _captureCounter[fIndex]--;
                 break;
             }
         }
@@ -813,6 +815,7 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
 
                 _formatTransfer[fIndex] =
                     new FT_Dx12("FormatTransfer", s.currentD3D12Device, s.currentSwapchainDesc.BufferDesc.Format);
+
                 break;
             }
 
@@ -822,7 +825,6 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
                 if (!_formatTransfer[fIndex]->CreateBufferResource(s.currentD3D12Device, _captureBuffer[fIndex],
                                                                    D3D12_RESOURCE_STATE_UNORDERED_ACCESS))
                 {
-                    _captureCounter[fIndex]--;
                     break;
                 }
 
@@ -866,7 +868,6 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
             else
             {
                 LOG_WARN("_formatTransfer is null or can't create _formatTransfer buffer!");
-                _captureCounter[fIndex]--;
                 break;
             }
         }
@@ -912,14 +913,17 @@ bool Hudfix_Dx12::CheckForHudless(ID3D12GraphicsCommandList* cmdList, ResourceIn
         if (capturedHudlessInfo != nullptr)
         {
             capturedHudlessInfo->usageCount++;
+            capturedHudlessInfo->captureInfo = resource->captureInfo;
+            LOG_DEBUG("Updated hudless info, count: {}, enabled: {}", capturedHudlessInfo->usageCount,
+                      capturedHudlessInfo->enabled);
         }
         else
         {
-            s.CapturedHudlesses[resource->buffer] = {};
-            capturedHudlessInfo = &s.CapturedHudlesses[resource->buffer];
-        }
+            s.CapturedHudlesses.insert_or_assign(resource->buffer,
+                                                 CapturedHudlessInfo { 1, resource->captureInfo, true });
 
-        capturedHudlessInfo->captureInfo = resource->captureInfo;
+            LOG_DEBUG("Inserted hudless info for {:X}", (size_t) resource->buffer);
+        }
 
         return true;
 
