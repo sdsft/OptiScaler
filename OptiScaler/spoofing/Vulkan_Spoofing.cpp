@@ -258,6 +258,12 @@ inline static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
 VkResult VulkanSpoofing::hkvkCreateInstance(VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator,
                                             VkInstance* pInstance)
 {
+    if (State::Instance().creatingD3DDevice)
+    {
+        LOG_INFO("Skipping because DXVK/VKD3D is creating a D3D device");
+        return VK_SUCCESS;
+    }
+
     if (pCreateInfo == nullptr)
         return VK_ERROR_INITIALIZATION_FAILED;
 
@@ -369,6 +375,12 @@ VkResult VulkanSpoofing::hkvkCreateInstance(VkInstanceCreateInfo* pCreateInfo, c
 VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDeviceCreateInfo* pCreateInfo,
                                           const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
 {
+    if (State::Instance().creatingD3DDevice)
+    {
+        LOG_INFO("Skipping because DXVK/VKD3D is creating a D3D device");
+        return VK_SUCCESS;
+    }
+
     LOG_FUNC();
 
     static std::vector<const char*> newExtensionList;

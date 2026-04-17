@@ -145,8 +145,12 @@ static HRESULT hkD3D11On12CreateDevice(IUnknown* pDevice, UINT Flags, const D3D_
         rtss = true;
     }
 
-    auto result = o_D3D11On12CreateDevice(pDevice, Flags, pFeatureLevels, FeatureLevels, &copyCommandQueues, NumQueues,
-                                          NodeMask, ppDevice, ppImmediateContext, pChosenFeatureLevel);
+    HRESULT result = E_FAIL;
+    {
+        ScopedCreatingD3DDevice skipCreatingD3DDevice {};
+        result = o_D3D11On12CreateDevice(pDevice, Flags, pFeatureLevels, FeatureLevels, &copyCommandQueues, NumQueues,
+                                         NodeMask, ppDevice, ppImmediateContext, pChosenFeatureLevel);
+    }
 
     if (result == S_OK && *ppDevice != nullptr && !rtss && State::Instance().currentD3D12Device == nullptr)
     {
@@ -200,6 +204,7 @@ static HRESULT hkD3D11CreateDevice(IDXGIAdapter* pAdapter, D3D_DRIVER_TYPE Drive
                     HRESULT result;
                     {
                         ScopedSkipParentWrapping skipParentWrapping {};
+                        ScopedCreatingD3DDevice skipCreatingD3DDevice {};
                         result =
                             o_D3D11CreateDevice(pAdapter, DriverType, Software, Flags, pFeatureLevels, FeatureLevels,
                                                 SDKVersion, ppDevice, pFeatureLevel, ppImmediateContext);
@@ -308,6 +313,7 @@ static HRESULT hkD3D11CreateDeviceAndSwapChain(IDXGIAdapter* pAdapter, D3D_DRIVE
                     HRESULT result;
                     {
                         ScopedSkipParentWrapping skipParentWrapping {};
+                        ScopedCreatingD3DDevice skipCreatingD3DDevice {};
                         result = o_D3D11CreateDeviceAndSwapChain(pAdapter, DriverType, Software, Flags, pFeatureLevels,
                                                                  FeatureLevels, SDKVersion, pSwapChainDesc, ppSwapChain,
                                                                  ppDevice, pFeatureLevel, ppImmediateContext);

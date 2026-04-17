@@ -223,6 +223,7 @@ class State
 
     // Vulkan stuff
     bool vulkanCreatingSC = false;
+    bool creatingD3DDevice = false;
     bool vulkanSkipHooks = false;
     VkInstance VulkanInstance = nullptr;
 
@@ -435,4 +436,18 @@ class ScopedVulkanCreatingSC
         State::Instance().vulkanCreatingSC = true;
     }
     ~ScopedVulkanCreatingSC() { State::Instance().vulkanCreatingSC = previousState; }
+};
+
+class ScopedCreatingD3DDevice
+{
+  private:
+    bool previousState;
+
+  public:
+    ScopedCreatingD3DDevice()
+    {
+        previousState = State::Instance().creatingD3DDevice;
+        State::Instance().creatingD3DDevice = true;
+    }
+    ~ScopedCreatingD3DDevice() { State::Instance().creatingD3DDevice = previousState; }
 };
