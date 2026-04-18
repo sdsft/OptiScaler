@@ -247,20 +247,34 @@ RCAS_Dx11::RCAS_Dx11(std::string InName, ID3D11Device* InDevice) : _name(InName)
             LOG_ERROR("[{0}] CreateComputeShader error: {1:X}", _name, hr);
             return;
         }
+
+        hr = _device->CreateComputeShader(reinterpret_cast<const void*>(da_sharpen_cso), sizeof(da_sharpen_cso),
+                                          nullptr, &_computeShaderDA);
+        if (FAILED(hr))
+        {
+            LOG_ERROR("[{0}] CreateComputeShader error for depth adaptive shader: {1:X}", _name, hr);
+            return;
+        }
     }
     else
     {
         // Compile shader blobs
         ID3DBlob* shaderBlob = RCAS_CompileShader(rcasCode.c_str(), "CSMain", "cs_5_0");
-        if (shaderBlob == nullptr)
+
+        HRESULT hr = E_FAIL;
+
+        if (shaderBlob != nullptr)
+        {
+            // create pso objects
+            hr = _device->CreateComputeShader(shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), nullptr,
+                                              &_computeShader);
+        }
+        else
         {
             LOG_ERROR("[{0}] RCAS_CompileShader error!", _name);
-            return;
+            hr = _device->CreateComputeShader(reinterpret_cast<const void*>(rcas_cso), sizeof(rcas_cso), nullptr,
+                                              &_computeShader);
         }
-
-        // create pso objects
-        auto hr = _device->CreateComputeShader(shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), nullptr,
-                                               &_computeShader);
 
         if (shaderBlob != nullptr)
         {
@@ -270,7 +284,33 @@ RCAS_Dx11::RCAS_Dx11(std::string InName, ID3D11Device* InDevice) : _name(InName)
 
         if (FAILED(hr))
         {
-            LOG_ERROR("[{0}] CreateComputeShader error: {1:X}", _name, hr);
+            LOG_ERROR("[{0}] CreateComputeShader error for rcas shader: {1:X}", _name, hr);
+            return;
+        }
+
+        shaderBlob = RCAS_CompileShader(daSharpenCode.c_str(), "CSMain", "cs_5_0");
+
+        if (shaderBlob != nullptr)
+        {
+            hr = _device->CreateComputeShader(shaderBlob->GetBufferPointer(), shaderBlob->GetBufferSize(), nullptr,
+                                              &_computeShaderDA);
+        }
+        else
+        {
+            LOG_ERROR("[{0}] RCAS_CompileShader error for depth adaptive shader!", _name);
+            hr = _device->CreateComputeShader(reinterpret_cast<const void*>(da_sharpen_cso), sizeof(da_sharpen_cso),
+                                              nullptr, &_computeShaderDA);
+        }
+
+        if (shaderBlob != nullptr)
+        {
+            shaderBlob->Release();
+            shaderBlob = nullptr;
+        }
+
+        if (FAILED(hr))
+        {
+            LOG_ERROR("[{0}] CreateComputeShader error for depth adaptive shader: {1:X}", _name, hr);
             return;
         }
     }

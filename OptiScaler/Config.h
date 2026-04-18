@@ -347,7 +347,7 @@ class Config
     CustomOptional<bool> RestoreComputeSignature { false };
     CustomOptional<bool> RestoreGraphicSignature { false };
 
-    CustomOptional<bool> UsePrecompiledShaders { true };
+    CustomOptional<bool> UsePrecompiledShaders { false };
 
     CustomOptional<bool> UseGenericAppIdWithDlss { false };
     CustomOptional<bool> PreferDedicatedGpu { false };
