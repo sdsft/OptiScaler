@@ -408,18 +408,25 @@ bool FSR2FeatureDx12_212::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVS
         RcasConstants rcasConstants {};
 
         rcasConstants.Sharpness = _sharpness;
-        rcasConstants.DisplayWidth = TargetWidth();
-        rcasConstants.DisplayHeight = TargetHeight();
         InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &rcasConstants.MvScaleX);
         InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &rcasConstants.MvScaleY);
-        rcasConstants.DisplaySizeMV = !(GetFeatureFlags() & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes);
-        rcasConstants.RenderHeight = RenderHeight();
-        rcasConstants.RenderWidth = RenderWidth();
+
+        if (DepthInverted())
+        {
+            rcasConstants.CameraNear = params.cameraFar;
+            rcasConstants.CameraFar = params.cameraNear;
+        }
+        else
+        {
+            rcasConstants.CameraNear = params.cameraNear;
+            rcasConstants.CameraFar = params.cameraFar;
+        }
 
         if (useSS)
         {
             if (!RCAS->Dispatch(Device, InCommandList, (ID3D12Resource*) params.output.resource,
-                                (ID3D12Resource*) params.motionVectors.resource, rcasConstants, OutputScaler->Buffer()))
+                                (ID3D12Resource*) params.motionVectors.resource, rcasConstants, OutputScaler->Buffer(),
+                                (ID3D12Resource*) params.depth.resource))
             {
                 Config::Instance()->RcasEnabled.set_volatile_value(false);
                 return true;
@@ -428,7 +435,8 @@ bool FSR2FeatureDx12_212::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVS
         else
         {
             if (!RCAS->Dispatch(Device, InCommandList, (ID3D12Resource*) params.output.resource,
-                                (ID3D12Resource*) params.motionVectors.resource, rcasConstants, paramOutput))
+                                (ID3D12Resource*) params.motionVectors.resource, rcasConstants, paramOutput,
+                                (ID3D12Resource*) params.depth.resource))
             {
                 Config::Instance()->RcasEnabled.set_volatile_value(false);
                 return true;

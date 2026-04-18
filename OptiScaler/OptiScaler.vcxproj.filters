@@ -770,6 +770,15 @@
     <ClInclude Include="hooks\Hook_Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="shaders\rcas\precompile\da_sharpen_Shader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\rcas\precompile\da_sharpen_Shader_Vk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\rcas\precompile\da_sharpen_Shader_Dx11.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Config.cpp">

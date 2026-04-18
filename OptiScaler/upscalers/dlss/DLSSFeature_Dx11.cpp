@@ -137,6 +137,7 @@ bool DLSSFeatureDx11::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NGX_P
 
         ID3D11Resource* paramOutput = nullptr;
         ID3D11Resource* paramMotion = nullptr;
+        ID3D11Resource* paramDepth = nullptr;
         ID3D11Resource* setBuffer = nullptr;
 
         bool useSS = Config::Instance()->OutputScalingEnabled.value_or_default() &&
@@ -144,6 +145,7 @@ bool DLSSFeatureDx11::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NGX_P
 
         InParameters->Get(NVSDK_NGX_Parameter_Output, &paramOutput);
         InParameters->Get(NVSDK_NGX_Parameter_MotionVectors, &paramMotion);
+        InParameters->Get(NVSDK_NGX_Parameter_Depth, &paramDepth);
 
         // supersampling
         if (useSS)
@@ -192,18 +194,16 @@ bool DLSSFeatureDx11::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NGX_P
             RcasConstants rcasConstants {};
 
             rcasConstants.Sharpness = _sharpness;
-            rcasConstants.DisplayWidth = TargetWidth();
-            rcasConstants.DisplayHeight = TargetHeight();
             InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &rcasConstants.MvScaleX);
             InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &rcasConstants.MvScaleY);
-            rcasConstants.DisplaySizeMV = !(GetFeatureFlags() & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes);
-            rcasConstants.RenderHeight = RenderHeight();
-            rcasConstants.RenderWidth = RenderWidth();
+            rcasConstants.CameraNear = Config::Instance()->FsrCameraNear.value_or_default();
+            rcasConstants.CameraFar = Config::Instance()->FsrCameraFar.value_or_default();
 
             if (useSS)
             {
                 if (!RCAS->Dispatch(Device, InDeviceContext, (ID3D11Texture2D*) setBuffer,
-                                    (ID3D11Texture2D*) paramMotion, rcasConstants, OutputScaler->Buffer()))
+                                    (ID3D11Texture2D*) paramMotion, rcasConstants, OutputScaler->Buffer(),
+                                    (ID3D11Texture2D*) paramDepth))
                 {
                     Config::Instance()->RcasEnabled.set_volatile_value(false);
                     return true;
@@ -212,7 +212,8 @@ bool DLSSFeatureDx11::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_NGX_P
             else
             {
                 if (!RCAS->Dispatch(Device, InDeviceContext, (ID3D11Texture2D*) setBuffer,
-                                    (ID3D11Texture2D*) paramMotion, rcasConstants, (ID3D11Texture2D*) paramOutput))
+                                    (ID3D11Texture2D*) paramMotion, rcasConstants, (ID3D11Texture2D*) paramOutput,
+                                    (ID3D11Texture2D*) paramDepth))
                 {
                     Config::Instance()->RcasEnabled.set_volatile_value(false);
                     return true;

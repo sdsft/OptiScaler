@@ -257,19 +257,30 @@ class Config
     CustomOptional<std::wstring, NoDefault> DLSSFeaturePath;
     CustomOptional<std::wstring, NoDefault> NvapiDllPath;
 
-    // CAS
-    CustomOptional<bool> RcasEnabled { false };
-    CustomOptional<bool> MotionSharpnessEnabled { false };
-    CustomOptional<bool> MotionSharpnessDebug { false };
-    CustomOptional<float> MotionSharpness { 0.4f };
-    CustomOptional<float> MotionThreshold { 0.0f };
-    CustomOptional<float> MotionScaleLimit { 10.0f };
-
     // Sharpness
     CustomOptional<bool> OverrideSharpness { false };
-    CustomOptional<float> Sharpness { 0.3f };
+    CustomOptional<float> Sharpness { 0.4f };
+
+    // CAS
+    CustomOptional<bool> RcasEnabled { false };
+
+    // RCAS
     CustomOptional<bool> ContrastEnabled { false };
-    CustomOptional<float> Contrast { 0.0f };
+    CustomOptional<float> Contrast { -0.3f };
+
+    // DA Sharpening
+    CustomOptional<bool> UseDepthAwareSharpen { false };
+    CustomOptional<bool> DADepthIsLinear { false };
+    CustomOptional<float, NoDefault> DADepthScale;
+    CustomOptional<float, NoDefault> DADepthBias;
+    CustomOptional<bool, NoDefault> DAClampOutput;
+
+    // MAS
+    CustomOptional<bool> MotionSharpnessEnabled { false };
+    CustomOptional<bool> MotionSharpnessDebug { false };
+    CustomOptional<float> MotionSharpness { 0.2f };
+    CustomOptional<float> MotionThreshold { 0.0f };
+    CustomOptional<float> MotionScaleLimit { 10.0f };
 
     // Menu
     CustomOptional<float, NoDefault> MenuScale;

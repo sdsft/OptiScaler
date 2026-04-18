@@ -519,18 +519,16 @@ bool XeSSFeature_Dx11::Evaluate(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Pa
         RcasConstants rcasConstants {};
 
         rcasConstants.Sharpness = _sharpness;
-        rcasConstants.DisplayWidth = TargetWidth();
-        rcasConstants.DisplayHeight = TargetHeight();
         InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &rcasConstants.MvScaleX);
         InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &rcasConstants.MvScaleY);
-        rcasConstants.DisplaySizeMV = !(GetFeatureFlags() & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes);
-        rcasConstants.RenderHeight = RenderHeight();
-        rcasConstants.RenderWidth = RenderWidth();
+        rcasConstants.CameraNear = Config::Instance()->FsrCameraNear.value_or_default();
+        rcasConstants.CameraFar = Config::Instance()->FsrCameraFar.value_or_default();
 
         if (useSS)
         {
             if (!RCAS->Dispatch(Device, DeviceContext, (ID3D11Texture2D*) params.pOutputTexture,
-                                (ID3D11Texture2D*) params.pVelocityTexture, rcasConstants, OutputScaler->Buffer()))
+                                (ID3D11Texture2D*) params.pVelocityTexture, rcasConstants, OutputScaler->Buffer(),
+                                (ID3D11Texture2D*) params.pDepthTexture))
             {
                 Config::Instance()->RcasEnabled = false;
                 return true;
@@ -540,7 +538,7 @@ bool XeSSFeature_Dx11::Evaluate(ID3D11DeviceContext* DeviceContext, NVSDK_NGX_Pa
         {
             if (!RCAS->Dispatch(Device, DeviceContext, (ID3D11Texture2D*) params.pOutputTexture,
                                 (ID3D11Texture2D*) params.pVelocityTexture, rcasConstants,
-                                (ID3D11Texture2D*) paramOutput))
+                                (ID3D11Texture2D*) paramOutput, (ID3D11Texture2D*) params.pDepthTexture))
             {
                 Config::Instance()->RcasEnabled = false;
                 return true;

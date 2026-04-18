@@ -197,18 +197,15 @@ bool DLSSDFeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_
             RcasConstants rcasConstants {};
 
             rcasConstants.Sharpness = _sharpness;
-            rcasConstants.DisplayWidth = TargetWidth();
-            rcasConstants.DisplayHeight = TargetHeight();
             InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &rcasConstants.MvScaleX);
             InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &rcasConstants.MvScaleY);
-            rcasConstants.DisplaySizeMV = !(GetFeatureFlags() & NVSDK_NGX_DLSS_Feature_Flags_MVLowRes);
-            rcasConstants.RenderHeight = RenderHeight();
-            rcasConstants.RenderWidth = RenderWidth();
+            rcasConstants.CameraNear = Config::Instance()->FsrCameraNear.value_or_default();
+            rcasConstants.CameraFar = Config::Instance()->FsrCameraFar.value_or_default();
 
             if (useSS)
             {
                 if (!RCAS->Dispatch(Device, InCommandList, setBuffer, paramMotion, rcasConstants,
-                                    OutputScaler->Buffer()))
+                                    OutputScaler->Buffer(), paramDepth))
                 {
                     Config::Instance()->RcasEnabled.set_volatile_value(false);
                     return true;
@@ -216,7 +213,8 @@ bool DLSSDFeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_
             }
             else
             {
-                if (!RCAS->Dispatch(Device, InCommandList, setBuffer, paramMotion, rcasConstants, paramOutput))
+                if (!RCAS->Dispatch(Device, InCommandList, setBuffer, paramMotion, rcasConstants, paramOutput,
+                                    paramDepth))
                 {
                     Config::Instance()->RcasEnabled.set_volatile_value(false);
                     return true;

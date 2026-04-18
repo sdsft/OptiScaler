@@ -435,8 +435,8 @@ bool Config::Reload(std::filesystem::path iniPath)
         // RCAS
         {
             RcasEnabled.set_from_config(readBool("CAS", "Enabled"));
+
             MotionSharpnessEnabled.set_from_config(readBool("CAS", "MotionSharpnessEnabled"));
-            MotionSharpnessDebug.set_from_config(readBool("CAS", "MotionSharpnessDebug"));
 
             if (auto setting = readFloat("CAS", "MotionSharpness"); setting.has_value())
                 MotionSharpness.set_from_config(std::clamp(setting.value(), -1.3f, 1.3f));
@@ -450,6 +450,14 @@ bool Config::Reload(std::filesystem::path iniPath)
             ContrastEnabled.set_from_config(readBool("CAS", "ContrastEnabled"));
             if (auto setting = readFloat("CAS", "Contrast"); setting.has_value())
                 Contrast.set_from_config(std::clamp(setting.value(), -2.0f, 2.0f));
+
+            UseDepthAwareSharpen.set_from_config(readBool("CAS", "UseDepthAwareSharpen"));
+            DADepthIsLinear.set_from_config(readBool("CAS", "DADepthIsLinear"));
+            DADepthScale.set_from_config(readFloat("CAS", "DADepthScale"));
+            DADepthBias.set_from_config(readFloat("CAS", "DADepthBias"));
+            DAClampOutput.set_from_config(readBool("CAS", "DAClampOutput"));
+
+            MotionSharpnessDebug.set_from_config(readBool("CAS", "SharpenerDebug"));
         }
 
         // Output Scaling
@@ -1019,6 +1027,30 @@ bool Config::SaveIni()
         ini.SetValue("Sharpness", "Sharpness", GetFloatValue(Instance()->Sharpness.value_for_config()).c_str());
     }
 
+    // CAS
+    {
+        ini.SetValue("CAS", "Enabled", GetBoolValue(Instance()->RcasEnabled.value_for_config()).c_str());
+
+        ini.SetValue("CAS", "MotionSharpnessEnabled",
+                     GetBoolValue(Instance()->MotionSharpnessEnabled.value_for_config()).c_str());
+        ini.SetValue("CAS", "MotionSharpness", GetFloatValue(Instance()->MotionSharpness.value_for_config()).c_str());
+        ini.SetValue("CAS", "MotionThreshold", GetFloatValue(Instance()->MotionThreshold.value_for_config()).c_str());
+        ini.SetValue("CAS", "MotionScaleLimit", GetFloatValue(Instance()->MotionScaleLimit.value_for_config()).c_str());
+
+        ini.SetValue("CAS", "ContrastEnabled", GetBoolValue(Instance()->ContrastEnabled.value_for_config()).c_str());
+        ini.SetValue("CAS", "Contrast", GetFloatValue(Instance()->Contrast.value_for_config()).c_str());
+
+        ini.SetValue("CAS", "UseDepthAwareSharpen",
+                     GetBoolValue(Instance()->UseDepthAwareSharpen.value_for_config()).c_str());
+        ini.SetValue("CAS", "DADepthIsLinear", GetBoolValue(Instance()->DADepthIsLinear.value_for_config()).c_str());
+        ini.SetValue("CAS", "DADepthScale", GetFloatValue(Instance()->DADepthScale.value_for_config()).c_str());
+        ini.SetValue("CAS", "DADepthBias", GetFloatValue(Instance()->DADepthBias.value_for_config()).c_str());
+        ini.SetValue("CAS", "DAClampOutput", GetBoolValue(Instance()->DAClampOutput.value_for_config()).c_str());
+
+        ini.SetValue("CAS", "SharpenerDebug",
+                     GetBoolValue(Instance()->MotionSharpnessDebug.value_for_config()).c_str());
+    }
+
     // Menu
     {
         ini.SetValue("Menu", "Scale", GetFloatValue(Instance()->MenuScale).c_str());
@@ -1061,22 +1093,6 @@ bool Config::SaveIni()
                      GetBoolValue(Instance()->HookOriginalNvngxOnly.value_for_config()).c_str());
         ini.SetValue("Hooks", "EarlyHooking", GetBoolValue(Instance()->EarlyHooking.value_for_config()).c_str());
         ini.SetValue("Hooks", "UseNtdllHooks", GetBoolValue(Instance()->UseNtdllHooks.value_for_config()).c_str());
-    }
-
-    // CAS
-    {
-        ini.SetValue("CAS", "Enabled",
-                     Instance()->RcasEnabled.has_value() ? (Instance()->RcasEnabled.value() ? "true" : "false")
-                                                         : "auto");
-        ini.SetValue("CAS", "MotionSharpnessEnabled",
-                     GetBoolValue(Instance()->MotionSharpnessEnabled.value_for_config()).c_str());
-        ini.SetValue("CAS", "MotionSharpnessDebug",
-                     GetBoolValue(Instance()->MotionSharpnessDebug.value_for_config()).c_str());
-        ini.SetValue("CAS", "MotionSharpness", GetFloatValue(Instance()->MotionSharpness.value_for_config()).c_str());
-        ini.SetValue("CAS", "MotionThreshold", GetFloatValue(Instance()->MotionThreshold.value_for_config()).c_str());
-        ini.SetValue("CAS", "MotionScaleLimit", GetFloatValue(Instance()->MotionScaleLimit.value_for_config()).c_str());
-        ini.SetValue("CAS", "ContrastEnabled", GetBoolValue(Instance()->ContrastEnabled.value_for_config()).c_str());
-        ini.SetValue("CAS", "Contrast", GetFloatValue(Instance()->Contrast.value_for_config()).c_str());
     }
 
     // InitFlags

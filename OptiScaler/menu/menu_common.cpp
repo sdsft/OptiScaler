@@ -4570,11 +4570,8 @@ bool MenuCommon::RenderMenu()
                     ImGui::BeginDisabled(!config->OverrideSharpness.value_or_default());
 
                     float sharpness = config->Sharpness.value_or_default();
-                    auto justRcasEnabled =
-                        config->RcasEnabled.value_or(rcasEnabled) && !config->ContrastEnabled.value_or_default();
-                    float sharpnessLimit = justRcasEnabled ? 1.3f : 1.0f;
 
-                    if (ImGui::SliderFloat("Sharpness", &sharpness, 0.0f, sharpnessLimit))
+                    if (ImGui::SliderFloat("Sharpness", &sharpness, 0.0f, 1.0f))
                         config->Sharpness = sharpness;
 
                     ImGui::EndDisabled();
@@ -4587,36 +4584,157 @@ bool MenuCommon::RenderMenu()
                         rcasEnabled = (currentBackend == "xess" ||
                                        (currentBackend == "dlss" && currentFeature->Version() >= requiredDlssVersion));
 
+                        ImGui::Spacing();
+                        ImGui::Spacing();
+
                         if (bool rcas = config->RcasEnabled.value_or(rcasEnabled);
-                            ImGui::Checkbox("Enable RCAS", &rcas))
+                            ImGui::Checkbox("Enable RCAS/DA", &rcas))
                             config->RcasEnabled = rcas;
-                        ShowHelpMarker("A sharpening filter\n"
-                                       "By default uses a sharpening value provided by the game\n"
-                                       "Select 'Override' under 'Sharpness' and adjust the slider to change it\n\n"
-                                       "Some upscalers have their own sharpness filter, so RCAS is not always needed");
+
+                        ShowHelpMarker(
+                            "Enable OptiScaler's sharpening filter\n"
+                            "By default uses a sharpening value provided by the game\n"
+                            "Select 'Override' under 'Sharpness' and adjust the slider to change it\n\n"
+                            "Some upscalers have their own sharpness filter,\n so this option is not always needed");
 
                         ImGui::BeginDisabled(!config->RcasEnabled.value_or(rcasEnabled));
 
-                        if (bool contrastEnabled = config->ContrastEnabled.value_or_default();
-                            ImGui::Checkbox("Contrast Enabled", &contrastEnabled))
-                            config->ContrastEnabled = contrastEnabled;
+                        bool useDA = Config::Instance()->UseDepthAwareSharpen.value_or_default();
+                        bool useRcas = !useDA;
 
-                        ShowHelpMarker("Increases sharpness at high contrast areas.");
+                        if (ImGui::Checkbox("Use RCAS", &useRcas))
+                            Config::Instance()->UseDepthAwareSharpen = !useRcas;
 
-                        if (config->ContrastEnabled.value_or_default() && config->Sharpness.value_or_default() > 1.0f)
-                            config->Sharpness = 1.0f;
+                        ShowHelpMarker("Use AMD's RCAS\n"
+                                       "Modified to add Contrast parameter and MAS support");
 
-                        ImGui::BeginDisabled(!config->ContrastEnabled.value_or_default());
+                        ImGui::SameLine(0.0f, 6.0f);
 
-                        float contrast = config->Contrast.value_or_default();
-                        if (ImGui::SliderFloat("Contrast", &contrast, 0.0f, 2.0f, "%.2f"))
-                            config->Contrast = contrast;
+                        if (ImGui::Checkbox("Use Depth Aware", &useDA))
+                            Config::Instance()->UseDepthAwareSharpen = useDA;
 
-                        ShowHelpMarker("Higher values increases sharpness at high contrast areas.\n"
-                                       "High values might cause graphical GLITCHES \n"
-                                       "when used with high sharpness values !!!");
+                        ShowHelpMarker("Use Depth Aware Sharpening\n"
+                                       "Smarter sharpening with less artifacts, but also more heavy");
 
-                        ImGui::EndDisabled();
+                        ImGui::Spacing();
+
+                        if (bool overrideMotionSharpness = config->MotionSharpnessEnabled.value_or_default();
+                            ImGui::Checkbox("Enable Motion Adaptive Sharpness", &overrideMotionSharpness))
+                            config->MotionSharpnessEnabled = overrideMotionSharpness;
+                        ShowHelpMarker("Enables sharpness adjustments according to the motion");
+
+                        if (Config::Instance()->UseDepthAwareSharpen.value_or_default())
+                        {
+                            bool depthLinear = config->DADepthIsLinear.value_or_default();
+                            if (ImGui::Checkbox("Linear Depth", &depthLinear))
+                                config->DADepthIsLinear = depthLinear;
+
+                            ShowHelpMarker("Most games use non-linear depth but\nDLSS-D might need this option to be "
+                                           "enabled.\nCould be verify via Debug view");
+
+                            ImGui::SameLine(0.0f, 6.0f);
+
+                            if (bool overrideMSDebug = config->MotionSharpnessDebug.value_or_default();
+                                ImGui::Checkbox("DA Debug", &overrideMSDebug))
+                                config->MotionSharpnessDebug = overrideMSDebug;
+
+                            ShowHelpMarker("Enable DAS debug view");
+
+                            if (auto ch = ScopedCollapsingHeader("Advanced DA Parameters"); ch.IsHeaderOpen())
+                            {
+                                ScopedIndent indent {};
+                                ImGui::Spacing();
+
+                                if (bool clamp = config->DAClampOutput.value_or(false);
+                                    ImGui::Checkbox("Clamp Output", &clamp))
+                                {
+                                    if (clamp)
+                                        config->DAClampOutput = true;
+                                    else
+                                        config->DAClampOutput.reset();
+                                }
+
+                                ShowHelpMarker(
+                                    "Clamps the final image to the [0, 1] range.\n\n"
+                                    "Prevents overshoot artifacts such as bright halos or negative colors.\n"
+                                    "Recommended for LDR pipelines; optional for HDR depending on tone-mapping.\n\n"
+                                    "When not set OptiScaler controls it via upscalers HDR flag");
+
+                                if (depthLinear)
+                                {
+                                    float depthBias = config->DADepthBias.value_or(0.0015f);
+                                    if (ImGui::SliderFloat("Depth Bias", &depthBias, 0.005f, 0.03f, "%.4f"))
+                                        config->DADepthBias = depthBias;
+
+                                    ShowHelpMarker(
+                                        "Ignores small depth differences before edge detection.\n\n"
+                                        "Higher values reduce flickering and noise from minor depth changes, but may "
+                                        "soften real geometry edges.\n"
+                                        "Lower values preserve fine detail but can cause unstable or noisy edge "
+                                        "detection.");
+
+                                    float depthScale = config->DADepthScale.value_or(250.0f);
+                                    if (ImGui::SliderFloat("Depth Scale", &depthScale, 100.0f, 600.0f, "%.1f"))
+                                        config->DADepthScale = depthScale;
+
+                                    ShowHelpMarker(
+                                        "Controls how strongly sharpening is reduced across depth edges.\n\n"
+                                        "Higher values more aggressively prevent sharpening across object boundaries "
+                                        "(reduces halos).\n"
+                                        "Lower values allow more sharpening to pass across edges (sharper but "
+                                        "riskier).");
+                                }
+                                else
+                                {
+                                    float depthBias = config->DADepthBias.value_or(0.01f);
+                                    if (ImGui::SliderFloat("Depth Bias", &depthBias, 0.005f, 0.03f, "%.3f"))
+                                        config->DADepthBias = depthBias;
+
+                                    ShowHelpMarker(
+                                        "Ignores small depth differences before edge detection.\n\n"
+                                        "Higher values reduce flickering and noise from minor depth changes, but may "
+                                        "soften real geometry edges.\n"
+                                        "Lower values preserve fine detail but can cause unstable or noisy edge "
+                                        "detection.");
+
+                                    float depthScale = config->DADepthScale.value_or(4.0f);
+                                    if (ImGui::SliderFloat("Depth Scale", &depthScale, 2.0f, 10.0f, "%.1f"))
+                                        config->DADepthScale = depthScale;
+
+                                    ShowHelpMarker(
+                                        "Controls how strongly sharpening is reduced across depth edges.\n\n"
+                                        "Higher values more aggressively prevent sharpening across object boundaries "
+                                        "(reduces halos).\n"
+                                        "Lower values allow more sharpening to pass across edges (sharper but "
+                                        "riskier).");
+                                }
+
+                                if (ImGui::Button("Reset Depth Values"))
+                                {
+                                    config->DADepthBias.reset();
+                                    config->DADepthScale.reset();
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (bool contrastEnabled = config->ContrastEnabled.value_or_default();
+                                ImGui::Checkbox("Contrast Enabled", &contrastEnabled))
+                                config->ContrastEnabled = contrastEnabled;
+
+                            ShowHelpMarker("Controls sharpness at high contrast areas.");
+
+                            ImGui::BeginDisabled(!config->ContrastEnabled.value_or_default());
+
+                            float contrast = config->Contrast.value_or_default();
+                            if (ImGui::SliderFloat("Contrast", &contrast, -2.0f, 2.0f, "%.2f"))
+                                config->Contrast = contrast;
+
+                            ShowHelpMarker("Positive values decrease sharpness at high contrast areas.\n"
+                                           "Negative values increase sharpness at high contrast areas.");
+
+                            ImGui::EndDisabled();
+                        }
 
                         ImGui::Spacing();
                         if (auto ch = ScopedCollapsingHeader("Motion Adaptive Sharpness##2"); ch.IsHeaderOpen())
@@ -4624,32 +4742,44 @@ bool MenuCommon::RenderMenu()
                             ScopedIndent indent {};
                             ImGui::Spacing();
 
-                            if (bool overrideMotionSharpness = config->MotionSharpnessEnabled.value_or_default();
-                                ImGui::Checkbox("Motion Adaptive Sharpness", &overrideMotionSharpness))
-                                config->MotionSharpnessEnabled = overrideMotionSharpness;
-                            ShowHelpMarker("Applies more sharpness to things in motion");
-
                             ImGui::BeginDisabled(!config->MotionSharpnessEnabled.value_or_default());
 
-                            ImGui::SameLine(0.0f, 6.0f);
-
-                            if (bool overrideMSDebug = config->MotionSharpnessDebug.value_or_default();
-                                ImGui::Checkbox("MAS Debug", &overrideMSDebug))
-                                config->MotionSharpnessDebug = overrideMSDebug;
-                            ShowHelpMarker("Areas that are more red will have more sharpness applied\n"
-                                           "Green areas will get reduced sharpness");
+                            if (!Config::Instance()->UseDepthAwareSharpen.value_or_default())
+                            {
+                                if (bool overrideMSDebug = config->MotionSharpnessDebug.value_or_default();
+                                    ImGui::Checkbox("MAS Debug", &overrideMSDebug))
+                                    config->MotionSharpnessDebug = overrideMSDebug;
+                                ShowHelpMarker("Areas that are more red will have more sharpness applied\n"
+                                               "Green areas will get reduced sharpness");
+                            }
 
                             float motionSharpness = config->MotionSharpness.value_or_default();
-                            ImGui::SliderFloat("MotionSharpness", &motionSharpness, -1.3f, 1.3f, "%.3f");
+                            ImGui::SliderFloat("MotionSharpness", &motionSharpness, -1.0f, 1.0f, "%.3f");
                             config->MotionSharpness = motionSharpness;
+
+                            ShowHelpMarker("Maximum amount of sharpness that motion can add or remove.\n\n"
+                                           "Negative values reduce sharpening in motion (recommended).\n"
+                                           "Positive values increase sharpening in motion.\n\n"
+                                           "The final adjustment scales with motion and is capped at this value.");
 
                             float motionThreshod = config->MotionThreshold.value_or_default();
                             ImGui::SliderFloat("MotionThreshod", &motionThreshod, 0.0f, 100.0f, "%.2f");
                             config->MotionThreshold = motionThreshod;
 
+                            ShowHelpMarker(
+                                "Minimum motion required before motion-based sharpening adjustment begins.\n\n"
+                                "Higher values ignore small movements (more stable).\n"
+                                "Lower values react to subtle motion (more sensitive).");
+
                             float motionScale = config->MotionScaleLimit.value_or_default();
                             ImGui::SliderFloat("MotionRange", &motionScale, 0.01f, 100.0f, "%.2f");
                             config->MotionScaleLimit = motionScale;
+
+                            ShowHelpMarker(
+                                "Defines the motion range over which the effect ramps from zero to full strength.\n\n"
+                                "Values above the threshold are mapped into this range.\n"
+                                "Larger values make the response smoother and more gradual.\n"
+                                "Smaller values make the effect react more quickly and aggressively.");
 
                             ImGui::EndDisabled();
 
