@@ -138,6 +138,8 @@ bool FSR31FeatureVkOn12::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Paramet
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
+    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+
     // Set up dispatch parameters
     struct ffxDispatchDescUpscale params = { 0 };
     params.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;

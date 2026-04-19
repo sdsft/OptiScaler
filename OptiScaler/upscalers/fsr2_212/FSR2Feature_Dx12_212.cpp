@@ -41,6 +41,8 @@ bool FSR2FeatureDx12_212::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVS
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
+    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+
     Fsr212::FfxFsr2DispatchDescription params {};
 
     InParameters->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &params.jitterOffset.x);

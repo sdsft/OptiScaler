@@ -294,6 +294,8 @@ bool XeSSFeature_Vk::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Parameter* 
     if (!OS->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
+    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+
     if (State::Instance().xessDebug)
     {
         LOG_ERROR("xessDebug");

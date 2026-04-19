@@ -64,6 +64,8 @@ bool FSR31FeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
+    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+
     struct ffxDispatchDescUpscale params = { 0 };
     params.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
 

@@ -236,6 +236,8 @@ bool FSR2FeatureVkOnDx12_212::Evaluate(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Pa
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
+    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+
     // Set up dispatch parameters
     Fsr212::FfxFsr2DispatchDescription params = {};
 

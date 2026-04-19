@@ -152,6 +152,8 @@ bool FSR2FeatureDx11on12::Evaluate(ID3D11DeviceContext* InDeviceContext, NVSDK_N
         params.sharpness = _sharpness;
     }
 
+    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+
     unsigned int reset;
     InParameters->Get(NVSDK_NGX_Parameter_Reset, &reset);
     params.reset = (reset == 1);
