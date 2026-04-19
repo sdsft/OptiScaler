@@ -325,7 +325,7 @@ bool FSR2FeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_N
         LOG_WARN("Can't get motion vector scales!");
     }
 
-    if (!cfg.FsrUseFsrInputValues.value_or_default() ||
+    if (!Config::Instance()->FsrUseFsrInputValues.value_or_default() ||
         InParameters->Get("FSR.cameraNear", &params.cameraNear) != NVSDK_NGX_Result_Success)
     {
         if (DepthInverted())

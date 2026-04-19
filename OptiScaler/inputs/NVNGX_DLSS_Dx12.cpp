@@ -498,6 +498,7 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_CreateFeature(ID3D12GraphicsComma
         Config::Instance()->RestoreGraphicSignature.value_or_default())
     {
         D3D12Hooks::SetRootSignatureTracking(false);
+        D3D12Hooks::HookToCommandListLate(InCmdList);
     }
 
     if (InFeatureID == NVSDK_NGX_Feature_SuperSampling)
@@ -767,6 +768,20 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D12_EvaluateFeature(ID3D12GraphicsCom
     evalCounter++;
     if (Config::Instance()->SkipFirstFrames.has_value() && evalCounter < Config::Instance()->SkipFirstFrames.value())
         return NVSDK_NGX_Result_Success;
+
+    if (Config::Instance()->RestoreComputeSignature.value_or_default() &&
+        !D3D12Hooks::CanRestoreComputeRootSignature(InCmdList))
+    {
+        LOG_DEBUG("Skipping upscaling because can't restore compute signature");
+        return NVSDK_NGX_Result_Success;
+    }
+
+    if (Config::Instance()->RestoreGraphicSignature.value_or_default() &&
+        !D3D12Hooks::CanRestoreGraphicsRootSignature(InCmdList))
+    {
+        LOG_DEBUG("Skipping upscaling because can't restore graphics signature");
+        return NVSDK_NGX_Result_Success;
+    }
 
     if (InCallback)
         LOG_INFO("callback exist");

@@ -63,6 +63,10 @@ using PFN_SetGraphicsRootSignature =
 static PFN_SetComputeRootSignature o_SetComputeRootSignature = nullptr;
 static PFN_SetGraphicsRootSignature o_SetGraphicsRootSignature = nullptr;
 
+static std::atomic_bool hookedLate = false;
+static PFN_SetComputeRootSignature o_SetComputeRootSignatureLate = nullptr;
+static PFN_SetGraphicsRootSignature o_SetGraphicsRootSignatureLate = nullptr;
+
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12RootSignature*> computeSignatures;
 static ankerl::unordered_dense::map<ID3D12GraphicsCommandList*, ID3D12RootSignature*> graphicSignatures;
 static bool isUpscalerActive = false;
@@ -240,7 +244,7 @@ VALIDATE_HOOK(hkSetComputeRootSignature, PFN_SetComputeRootSignature)
 static void hkSetComputeRootSignature(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
     if (Config::Instance()->RestoreComputeSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
-        pRootSignature != nullptr)
+        pRootSignature != nullptr && !hookedLate)
     {
         std::unique_lock<std::shared_mutex> lock(computeSigatureMutex);
         computeSignatures.insert_or_assign(commandList, pRootSignature);
@@ -253,13 +257,68 @@ VALIDATE_HOOK(hkSetGraphicsRootSignature, PFN_SetGraphicsRootSignature)
 static void hkSetGraphicsRootSignature(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
 {
     if (Config::Instance()->RestoreGraphicSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
-        pRootSignature != nullptr)
+        pRootSignature != nullptr && !hookedLate)
     {
         std::unique_lock<std::shared_mutex> lock(graphSigatureMutex);
         graphicSignatures.insert_or_assign(commandList, pRootSignature);
     }
 
     o_SetGraphicsRootSignature(commandList, pRootSignature);
+}
+
+VALIDATE_HOOK(hkSetComputeRootSignatureLate, PFN_SetComputeRootSignature)
+static void hkSetComputeRootSignatureLate(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
+{
+    if (Config::Instance()->RestoreComputeSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
+        pRootSignature != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(computeSigatureMutex);
+        computeSignatures.insert_or_assign(commandList, pRootSignature);
+    }
+
+    o_SetComputeRootSignatureLate(commandList, pRootSignature);
+}
+
+VALIDATE_HOOK(hkSetGraphicsRootSignatureLate, PFN_SetGraphicsRootSignature)
+static void hkSetGraphicsRootSignatureLate(ID3D12GraphicsCommandList* commandList, ID3D12RootSignature* pRootSignature)
+{
+    if (Config::Instance()->RestoreGraphicSignature.value_or_default() && !isUpscalerActive && commandList != nullptr &&
+        pRootSignature != nullptr)
+    {
+        std::unique_lock<std::shared_mutex> lock(graphSigatureMutex);
+        graphicSignatures.insert_or_assign(commandList, pRootSignature);
+    }
+
+    o_SetGraphicsRootSignatureLate(commandList, pRootSignature);
+}
+
+void D3D12Hooks::HookToCommandListLate(ID3D12GraphicsCommandList* commandList)
+{
+    if (o_SetComputeRootSignatureLate || o_SetGraphicsRootSignatureLate)
+        return;
+
+    // Get the vtable pointer
+    PVOID* pVTable = *(PVOID**) commandList;
+
+    o_SetComputeRootSignatureLate = (PFN_SetComputeRootSignature) pVTable[29];
+    o_SetGraphicsRootSignatureLate = (PFN_SetGraphicsRootSignature) pVTable[30];
+
+    if (o_SetComputeRootSignatureLate != nullptr || o_SetGraphicsRootSignatureLate != nullptr)
+    {
+        DetourTransactionBegin();
+        DetourUpdateThread(GetCurrentThread());
+
+        if (o_SetComputeRootSignatureLate != nullptr)
+            DetourAttach(&(PVOID&) o_SetComputeRootSignatureLate, hkSetComputeRootSignatureLate);
+
+        if (o_SetGraphicsRootSignatureLate != nullptr)
+            DetourAttach(&(PVOID&) o_SetGraphicsRootSignatureLate, hkSetGraphicsRootSignatureLate);
+
+        LOG_DEBUG("Hooked SetRootSignature functions Late");
+        hookedLate = true;
+
+        DetourTransactionCommit();
+    }
 }
 
 static void HookToCommandList(ID3D12Device* InDevice)
@@ -1237,6 +1296,16 @@ void D3D12Hooks::Unhook()
 }
 
 void D3D12Hooks::SetRootSignatureTracking(bool enable) { isUpscalerActive = !enable; }
+
+bool D3D12Hooks::CanRestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList)
+{
+    return computeSignatures.contains(cmdList);
+}
+
+bool D3D12Hooks::CanRestoreGraphicsRootSignature(ID3D12GraphicsCommandList* cmdList)
+{
+    return graphicSignatures.contains(cmdList);
+}
 
 void D3D12Hooks::RestoreComputeRootSignature(ID3D12GraphicsCommandList* cmdList)
 {
