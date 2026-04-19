@@ -39,6 +39,7 @@ sl1::pfunLogMessageCallback* StreamlineHooks::o_logCallback_sl1 = nullptr;
 // DLSS
 StreamlineHooks::PFN_slGetPluginFunction StreamlineHooks::o_dlss_slGetPluginFunction = nullptr;
 StreamlineHooks::PFN_slOnPluginLoad StreamlineHooks::o_dlss_slOnPluginLoad = nullptr;
+decltype(&slDLSSGetOptimalSettings) StreamlineHooks::o_slDLSSGetOptimalSettings = nullptr;
 
 // DLSSG
 StreamlineHooks::PFN_slGetPluginFunction StreamlineHooks::o_dlssg_slGetPluginFunction = nullptr;
@@ -520,6 +521,33 @@ bool StreamlineHooks::hkdlss_slOnPluginLoad(sl::param::IParameters* params, cons
     return result;
 }
 
+sl::Result StreamlineHooks::hkslDLSSGetOptimalSettings(const sl::DLSSOptions& options,
+                                                       sl::DLSSOptimalSettings& settings)
+{
+    static bool modesBroken = false;
+
+    auto localOptions = options;
+
+    if (localOptions.mode == sl::DLSSMode::eOff)
+        modesBroken = true;
+
+    if (modesBroken)
+    {
+        if (localOptions.mode == sl::DLSSMode::eMaxPerformance)
+            localOptions.mode = sl::DLSSMode::eUltraPerformance;
+        else if (localOptions.mode == sl::DLSSMode::eBalanced)
+            localOptions.mode = sl::DLSSMode::eMaxPerformance;
+        else if (localOptions.mode == sl::DLSSMode::eMaxQuality)
+            localOptions.mode = sl::DLSSMode::eBalanced;
+        else if (localOptions.mode == sl::DLSSMode::eUltraQuality)
+            localOptions.mode = sl::DLSSMode::eMaxQuality;
+        else if (localOptions.mode == sl::DLSSMode::eUltraPerformance)
+            localOptions.mode = sl::DLSSMode::eDLAA;
+    }
+
+    return o_slDLSSGetOptimalSettings(localOptions, settings);
+}
+
 bool StreamlineHooks::hkdlssg_slOnPluginLoad(sl::param::IParameters* params, const char* loaderJSON,
                                              const char** pluginJSON)
 {
@@ -764,12 +792,19 @@ sl::Result StreamlineHooks::hkslReflexSetOptions(const sl::ReflexOptions& option
 
 void* StreamlineHooks::hkdlss_slGetPluginFunction(const char* functionName)
 {
-    // LOG_DEBUG("{}", functionName);
+    LOG_DEBUG("{}", functionName);
 
     if (strcmp(functionName, "slOnPluginLoad") == 0)
     {
         o_dlss_slOnPluginLoad = (PFN_slOnPluginLoad) o_dlss_slGetPluginFunction(functionName);
         return &hkdlss_slOnPluginLoad;
+    }
+
+    if (strcmp(functionName, "slDLSSGetOptimalSettings") == 0 &&
+        State::Instance().gameQuirks & GameQuirk::PregmataFixDLSSModes)
+    {
+        o_slDLSSGetOptimalSettings = (decltype(&slDLSSGetOptimalSettings)) o_dlss_slGetPluginFunction(functionName);
+        return &hkslDLSSGetOptimalSettings;
     }
 
     return o_dlss_slGetPluginFunction(functionName);

@@ -1245,6 +1245,9 @@ static void printQuirks(flag_set<GameQuirk>& quirks)
     if (quirks & GameQuirk::OldOverlayMenu)
         stringQuirks.push_back("Using old overlay (draws on upscaled image)");
 
+    if (quirks & GameQuirk::PregmataFixDLSSModes)
+        stringQuirks.push_back("Fix DLSS quality selection in Pragmata");
+
     state->detectedQuirks.append_range(stringQuirks);
     for (auto& stringQuirk : stringQuirks)
         spdlog::info("Quirk: {}", stringQuirk);
