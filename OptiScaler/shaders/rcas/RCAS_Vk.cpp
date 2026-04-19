@@ -392,8 +392,8 @@ void RCAS_Vk::UpdateDescriptorSet(VkCommandBuffer cmdList, int setIndex, VkImage
                            0, nullptr);
 }
 
-void RCAS_Vk::UpdateDescriptorSetDA(VkCommandBuffer cmdList, int setIndex, VkImageView inputView, VkImageView motionView,
-                                    VkImageView depthView, VkImageView outputView)
+void RCAS_Vk::UpdateDescriptorSetDA(VkCommandBuffer cmdList, int setIndex, VkImageView inputView,
+                                    VkImageView motionView, VkImageView depthView, VkImageView outputView)
 {
     (void) cmdList;
 
@@ -629,11 +629,12 @@ bool RCAS_Vk::Dispatch(VkDevice InDevice, VkCommandBuffer InCmdList, RcasConstan
                        VkImageView InResourceView, VkImageView InMotionVectorsView, VkImageView OutResourceView,
                        VkExtent2D OutExtent, VkImageView InDepthView)
 {
-    if (!_init || InDevice == VK_NULL_HANDLE || InCmdList == VK_NULL_HANDLE || State::Instance().currentFeature == nullptr)
+    if (!_init || InDevice == VK_NULL_HANDLE || InCmdList == VK_NULL_HANDLE ||
+        State::Instance().currentFeature == nullptr)
         return false;
 
-    const bool useDepthAdaptive = Config::Instance()->UseDepthAwareSharpen.value_or_default() &&
-                                  InDepthView != VK_NULL_HANDLE;
+    const bool useDepthAdaptive =
+        Config::Instance()->UseDepthAwareSharpen.value_or_default() && InDepthView != VK_NULL_HANDLE;
 
     if (useDepthAdaptive)
         return DispatchDepthAdaptive(InDevice, InCmdList, InConstants, InResourceView, InMotionVectorsView,
