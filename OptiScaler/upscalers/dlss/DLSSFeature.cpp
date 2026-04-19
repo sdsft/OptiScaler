@@ -9,13 +9,10 @@ void DLSSFeature::ProcessEvaluateParams(NVSDK_NGX_Parameter* InParameters)
     LOG_FUNC();
 
     // override sharpness
-    if (Config::Instance()->OverrideSharpness.value_or_default() &&
-        !(State::Instance().api != Vulkan && Config::Instance()->RcasEnabled.value_or_default()))
+    if (Config::Instance()->OverrideSharpness.value_or_default() && !Config::Instance()->RcasEnabled.value_or_default())
     {
         auto sharpness = Config::Instance()->Sharpness.value_or_default();
-
         sharpness = std::min(sharpness, 1.0f);
-
         InParameters->Set(NVSDK_NGX_Parameter_Sharpness, sharpness);
     }
     // rcas enabled

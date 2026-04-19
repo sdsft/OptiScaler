@@ -8,14 +8,10 @@
 void DLSSDFeature::ProcessEvaluateParams(NVSDK_NGX_Parameter* InParameters)
 {
     // override sharpness
-    if (Config::Instance()->OverrideSharpness.value_or_default() &&
-        !(State::Instance().api == DX12 && Config::Instance()->RcasEnabled.value_or_default()))
+    if (Config::Instance()->OverrideSharpness.value_or_default() && !Config::Instance()->RcasEnabled.value_or_default())
     {
         auto sharpness = Config::Instance()->Sharpness.value_or_default();
-
-        if (sharpness > 1.0f)
-            sharpness = 1.0f;
-
+        sharpness = std::min(sharpness, 1.0f);
         InParameters->Set(NVSDK_NGX_Parameter_Sharpness, sharpness);
     }
     // rcas enabled
