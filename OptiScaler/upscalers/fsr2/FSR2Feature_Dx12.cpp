@@ -316,24 +316,16 @@ bool FSR2FeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_N
     _accessToReactiveMask = paramReactiveMask != nullptr;
     _hasOutput = params.output.resource != nullptr;
 
-    float MVScaleX = 1.0f;
-    float MVScaleY = 1.0f;
+    params.motionVectorScale.x = 1.0f;
+    params.motionVectorScale.y = 1.0f;
 
-    if (InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &MVScaleX) == NVSDK_NGX_Result_Success &&
-        InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &MVScaleY) == NVSDK_NGX_Result_Success)
-    {
-        params.motionVectorScale.x = MVScaleX;
-        params.motionVectorScale.y = MVScaleY;
-    }
-    else
+    if (InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &params.motionVectorScale.x) != NVSDK_NGX_Result_Success ||
+        InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &params.motionVectorScale.y) != NVSDK_NGX_Result_Success)
     {
         LOG_WARN("Can't get motion vector scales!");
-
-        params.motionVectorScale.x = MVScaleX;
-        params.motionVectorScale.y = MVScaleY;
     }
 
-    if (!Config::Instance()->FsrUseFsrInputValues.value_or_default() ||
+    if (!cfg.FsrUseFsrInputValues.value_or_default() ||
         InParameters->Get("FSR.cameraNear", &params.cameraNear) != NVSDK_NGX_Result_Success)
     {
         if (DepthInverted())
