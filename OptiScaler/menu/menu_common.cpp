@@ -4627,7 +4627,12 @@ bool MenuCommon::RenderMenu()
                         {
                             bool depthLinear = config->DADepthIsLinear.value_or_default();
                             if (ImGui::Checkbox("Linear Depth", &depthLinear))
-                                config->DADepthIsLinear = depthLinear;
+                            {
+                                if (depthLinear)
+                                    config->DADepthIsLinear = true;
+                                else
+                                    config->DADepthIsLinear.reset();
+                            }
 
                             ShowHelpMarker("Most games use non-linear depth but\nDLSS-D might need this option to be "
                                            "enabled.\nCould be verify via Debug view");

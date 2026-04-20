@@ -31,7 +31,8 @@ void DLSSDFeature::ProcessEvaluateParams(NVSDK_NGX_Parameter* InParameters)
         }
         else
         {
-            Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+            if (Config::Instance()->DADepthIsLinear.value_for_config_ignore_default() == std::nullopt)
+                Config::Instance()->DADepthIsLinear.set_volatile_value(false);
         }
     }
 

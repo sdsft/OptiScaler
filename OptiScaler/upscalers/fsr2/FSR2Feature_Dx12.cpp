@@ -65,7 +65,8 @@ bool FSR2FeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_N
         params.sharpness = _sharpness;
     }
 
-    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+    if (Config::Instance()->DADepthIsLinear.value_for_config_ignore_default() == std::nullopt)
+        Config::Instance()->DADepthIsLinear.set_volatile_value(false);
 
     unsigned int reset;
     InParameters->Get(NVSDK_NGX_Parameter_Reset, &reset);

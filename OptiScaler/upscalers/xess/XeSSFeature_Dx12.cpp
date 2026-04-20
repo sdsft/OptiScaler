@@ -45,7 +45,8 @@ bool XeSSFeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_N
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled = false;
 
-    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+    if (Config::Instance()->DADepthIsLinear.value_for_config_ignore_default() == std::nullopt)
+        Config::Instance()->DADepthIsLinear.set_volatile_value(false);
 
     xess_result_t xessResult;
 

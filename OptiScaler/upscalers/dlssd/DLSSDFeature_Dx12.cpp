@@ -199,8 +199,21 @@ bool DLSSDFeatureDx12::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVSDK_
             rcasConstants.Sharpness = _sharpness;
             InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_X, &rcasConstants.MvScaleX);
             InParameters->Get(NVSDK_NGX_Parameter_MV_Scale_Y, &rcasConstants.MvScaleY);
-            rcasConstants.CameraNear = Config::Instance()->FsrCameraNear.value_or_default();
-            rcasConstants.CameraFar = Config::Instance()->FsrCameraFar.value_or_default();
+
+            float nearPlane = 0.0f;
+            float farPlane = 0.0f;
+
+            if (InParameters->Get("DLSSG.CameraNear", &nearPlane) == NVSDK_NGX_Result_Success &&
+                InParameters->Get("DLSSG.CameraFar", &farPlane) == NVSDK_NGX_Result_Success)
+            {
+                rcasConstants.CameraNear = nearPlane;
+                rcasConstants.CameraFar = farPlane;
+            }
+            else
+            {
+                rcasConstants.CameraNear = Config::Instance()->FsrCameraNear.value_or_default();
+                rcasConstants.CameraFar = Config::Instance()->FsrCameraFar.value_or_default();
+            }
 
             if (useSS)
             {

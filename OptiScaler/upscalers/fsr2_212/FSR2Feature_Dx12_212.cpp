@@ -41,7 +41,8 @@ bool FSR2FeatureDx12_212::Evaluate(ID3D12GraphicsCommandList* InCommandList, NVS
     if (!OutputScaler->IsInit())
         Config::Instance()->OutputScalingEnabled.set_volatile_value(false);
 
-    Config::Instance()->DADepthIsLinear.set_volatile_value(false);
+    if (Config::Instance()->DADepthIsLinear.value_for_config_ignore_default() == std::nullopt)
+        Config::Instance()->DADepthIsLinear.set_volatile_value(false);
 
     Fsr212::FfxFsr2DispatchDescription params {};
 
