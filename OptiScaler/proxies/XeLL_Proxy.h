@@ -28,6 +28,40 @@ typedef decltype(&xellGetFramesReports) PFN_xellGetFramesReports;
 // Dx12
 typedef decltype(&xellD3D12CreateContext) PFN_xellD3D12CreateContext;
 
+// This callback runs once for every function exported by the Old DLL
+static int ExportCallback(PVOID hNewDll, ULONG nOrdinal, LPCSTR pszName, PVOID pOldFunction)
+{
+    if (pszName == NULL)
+        return true;
+
+    auto pNewFunction = GetProcAddress((HMODULE) hNewDll, pszName);
+
+    if (pNewFunction && pNewFunction != pOldFunction)
+    {
+        // pOldFunction doesn't get stored because we don't plan on calling the old DLL
+        if (DetourAttach(&pOldFunction, pNewFunction))
+            LOG_TRACE("Failed to detour {}", pszName);
+    }
+
+    return true;
+}
+
+static void RedirectAllExports(HMODULE hOld, HMODULE hNew)
+{
+    if (!hOld || !hNew)
+    {
+        LOG_ERROR("Could not find modules");
+        return;
+    }
+
+    DetourTransactionBegin();
+    DetourUpdateThread(GetCurrentThread());
+
+    DetourEnumerateExports(hOld, hNew, ExportCallback);
+
+    DetourTransactionCommit();
+}
+
 class XeLLProxy
 {
   private:
@@ -162,6 +196,11 @@ class XeLLProxy
 
             if (mainModule != nullptr)
             {
+                // We don't control which XeLL dll XeFG will pick
+                // Detouring GetModuleHandleExA seemingly isn't enough
+                if (memModule && mainModule != memModule)
+                    RedirectAllExports(memModule, mainModule);
+
                 break;
             }
         }
