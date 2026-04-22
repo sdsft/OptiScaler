@@ -250,7 +250,13 @@ struct AmdExtFfxApi : public IAmdExtFfxApi
 
         if (o_UpdateFfxApiProvider == nullptr)
         {
-            moduleAmdxcffx64 = NtdllProxy::LoadLibraryExW_Ldr(L"amdxcffx64.dll", NULL, 0);
+            HMODULE moduleAmdxcffx64 = nullptr;
+            HMODULE memModule = nullptr;
+            auto optiPath = Config::Instance()->MainDllPath.value();
+            Util::LoadProxyLibrary(L"amdxcffx64.dll", L"", optiPath, &memModule, &moduleAmdxcffx64);
+
+            if (moduleAmdxcffx64 == nullptr && memModule != nullptr)
+                moduleAmdxcffx64 = memModule;
 
             if (moduleAmdxcffx64 == nullptr)
             {
