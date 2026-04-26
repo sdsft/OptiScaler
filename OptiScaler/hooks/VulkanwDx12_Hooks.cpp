@@ -6221,17 +6221,11 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit(VkQueue queue, uint32_t submitCount, VkS
                 syncSubmitInfo.pSignalSemaphores = signals;
 
                 // move signal values to new submit
-                if (signalValues.size() > 0)
-                {
-                    syncTimelineInfo.signalSemaphoreValueCount =
-                        static_cast<uint32_t>(signalValues.size()) + signalCount;
-                    syncTimelineInfo.pSignalSemaphoreValues = signalValues.data();
-                }
-                else
-                {
-                    syncTimelineInfo.signalSemaphoreValueCount = signalCount;
-                    syncTimelineInfo.pSignalSemaphoreValues = nullptr;
-                }
+                for (uint32_t z = 0; z < signalCount; z++)
+                    signalValues.push_back(0);
+
+                syncTimelineInfo.signalSemaphoreValueCount = static_cast<uint32_t>(signalValues.size());
+                syncTimelineInfo.pSignalSemaphoreValues = signalValues.data();
 
                 // prepare new submit infos list
                 submitInfos.reserve(submitCount + 2);
@@ -6612,17 +6606,11 @@ VkResult Vulkan_wDx12::hk_vkQueueSubmit(VkQueue queue, uint32_t submitCount, con
                 syncSubmitInfo.pSignalSemaphores = signals;
 
                 // move signal values to new submit
-                if (signalValues.size() > 0)
-                {
-                    syncTimelineInfo.signalSemaphoreValueCount =
-                        static_cast<uint32_t>(signalValues.size()) + signalCount;
-                    syncTimelineInfo.pSignalSemaphoreValues = signalValues.data();
-                }
-                else
-                {
-                    syncTimelineInfo.signalSemaphoreValueCount = signalCount;
-                    syncTimelineInfo.pSignalSemaphoreValues = nullptr;
-                }
+                for (uint32_t z = 0; z < signalCount; z++)
+                    signalValues.push_back(0);
+
+                syncTimelineInfo.signalSemaphoreValueCount = static_cast<uint32_t>(signalValues.size());
+                syncTimelineInfo.pSignalSemaphoreValues = signalValues.data();
 
                 // prepare new submit infos list
                 finalSubmits.reserve(submitCount + 2);
