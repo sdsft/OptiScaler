@@ -4036,6 +4036,7 @@ bool MenuCommon::RenderMenu()
                                     if (ImGui::Selectable(intModes[i], (currentSet == i)))
                                     {
                                         LOG_DEBUG("XeFG Interpolation Count set to: {}", i + 1);
+                                        state.FGchanged = true;
                                         config->FGXeFGInterpolationCount = i + 1;
                                     }
                                 }
