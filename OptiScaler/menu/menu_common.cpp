@@ -46,6 +46,7 @@ static std::string selectedUpscalerName = "";
 static std::string currentBackend = "";
 static std::string currentBackendName = "";
 static int refreshRate = 0;
+static ImVec2 lastPosition(-1000.0f, -1000.0f);
 
 static ImVec2 splashPosition(-1000.0f, -1000.0f);
 static ImVec2 splashSize(0.0f, 0.0f);
@@ -1473,7 +1474,7 @@ static void ApplyThemeStyle()
     style.TabBorderSize = lightTheme ? 1.0f : 0.0f;
 
     style.ScrollbarSize = 10.0f;
-    style.GrabMinSize = 8.0f;
+    style.GrabMinSize = 10.0f;
 
     ImVec4 accent = ImVec4(conf->MenuAccentColorR.value_or_default(), conf->MenuAccentColorG.value_or_default(),
                            conf->MenuAccentColorB.value_or_default(), 1.0f);
@@ -6109,7 +6110,9 @@ bool MenuCommon::RenderMenu()
                     ImGui::Spacing();
                 }
 
-                if (winPos.x == 60.0 && winSize.x > 100)
+                if (lastPosition.x < -900.0f ||
+                    (lastPosition.x >= winPos.x - 1.0f && lastPosition.y >= winPos.y - 1.0f &&
+                     lastPosition.x <= winPos.x + 1.0f && lastPosition.y <= winPos.y + 1.0f))
                 {
                     float posX;
                     float posY;
@@ -6125,6 +6128,8 @@ bool MenuCommon::RenderMenu()
                     }
 
                     ImGui::SetWindowPos(ImVec2 { posX, posY });
+                    lastPosition.x = posX;
+                    lastPosition.y = posY;
                 }
 
                 ImGui::End();
@@ -6379,6 +6384,7 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
     _handle = InHwnd;
     _isVisible = false;
     _isUWP = isUWP;
+    lastPosition = { -1000.0f, -1000.0f };
 
     LOG_DEBUG("Handle: {0:X}", (size_t) _handle);
 
