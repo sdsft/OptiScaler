@@ -305,8 +305,14 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
 
         if (module != nullptr)
         {
-            if (/*!_overlayMethodsCalled && */ DxgiProxy::Module() != nullptr)
+            auto filePath = std::filesystem::path(libName);
+            auto filename = filePath.filename().wstring();
+            to_lower_in_place(filename);
+
+            if (!_overlayMethodsCalled.contains(filename) && DxgiProxy::Module() != nullptr)
             {
+                _overlayMethodsCalled[filename] = true;
+
                 LOG_INFO("Calling CreateDxgiFactory methods for overlay!");
                 IDXGIFactory* factory = nullptr;
                 IDXGIFactory1* factory1 = nullptr;
@@ -329,8 +335,6 @@ HMODULE LibraryLoadHooks::LoadLibraryCheckW(std::wstring libName, LPCWSTR lpLibF
                     LOG_DEBUG("CreateDxgiFactory2 ok");
                     factory2->Release();
                 }
-
-                _overlayMethodsCalled = true;
             }
 
             return module;
