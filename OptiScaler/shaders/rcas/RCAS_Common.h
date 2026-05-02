@@ -35,8 +35,7 @@ cbuffer Params : register(b0)
 
     // Nonlinear depth only.
     // These coefficients must be generated for the non-reversed depth convention.
-    // If DepthIsReversed != 0, reversal is applied in shader first:
-    // linearDepth = DepthLinearA / max(DepthLinearB - z * DepthLinearC, 1e-6)
+    // If DepthIsReversed != 0, reversed handling is applied in shader.
     float DepthLinearA;
     float DepthLinearB;
     float DepthLinearC;
@@ -88,21 +87,7 @@ Texture2D<float> DepthTex : register(t2);
 #endif
 RWTexture2D<float4> Dest : register(u0);
 
-static const int2 kCrossOffsets[4] =
-{
-    int2(0, -1),
-    int2(-1, 0),
-    int2(1, 0),
-    int2(0, 1)
-};
-
-static const int2 kDiagOffsets[4] =
-{
-    int2(-1, -1),
-    int2(1, -1),
-    int2(-1, 1),
-    int2(1, 1)
-};
+static const float3 kLumaCoeff = float3(0.2126, 0.7152, 0.0722);
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -152,16 +137,7 @@ float LinearizeDepth(float rawDepth)
 
     if (DepthIsReversed > 0)
     {
-        // Non-reversed formula:
-        // linear = near * far / (far - z * (far - near))
-        //
-        // Reversed-Z direct version:
-        // zNormal = 1 - zReversed
-        // denominator = near + zReversed * (far - near)
-        //
-        // near = DepthLinearB - DepthLinearC
         float nearPlane = DepthLinearB - DepthLinearC;
-
         return DepthLinearA / max(nearPlane + z * DepthLinearC, 1e-6);
     }
 
@@ -180,24 +156,23 @@ float DistanceSharpnessBoost(float linearDepth)
     // Works best if linearDepth is view-space-ish positive distance.
     // log2 keeps the boost gradual and avoids overboosting very far depth.
     float d = max(linearDepth, 1e-4);
-
     float boost = saturate((log2(d) - 4.0) * 0.15);
 
     // 1.0 near, up to 1.35 far
     return lerp(1.0, 1.35, boost);
 }
 
-float2 EstimateDepthGradient(int2 p, float centerDepth)
+float2 EstimateDepthGradientFromTaps(
+    float centerDepth,
+    float depthUp,
+    float depthLeft,
+    float depthRight,
+    float depthDown)
 {
-    float r = SafeLoadDepthLinearFromOutputPixel(p + int2(1, 0));
-    float l = SafeLoadDepthLinearFromOutputPixel(p + int2(-1, 0));
-    float u = SafeLoadDepthLinearFromOutputPixel(p + int2(0, 1));
-    float d = SafeLoadDepthLinearFromOutputPixel(p + int2(0, -1));
-
-    float gxF = r - centerDepth;
-    float gxB = centerDepth - l;
-    float gyF = u - centerDepth;
-    float gyB = centerDepth - d;
+    float gxF = depthRight - centerDepth;
+    float gxB = centerDepth - depthLeft;
+    float gyF = depthDown - centerDepth;
+    float gyB = centerDepth - depthUp;
 
     // Prefer the smoother local derivative.
     float gx = abs(gxF) < abs(gxB) ? gxF : gxB;
@@ -244,7 +219,6 @@ float ComputeAdaptiveSharpness(int2 pixelCoord)
         }
 
         float motion = max(abs(mv.x * MvScaleX), abs(mv.y * MvScaleY));
-
         float add = 0.0;
 
         if (motion > MotionThreshold)
@@ -260,13 +234,19 @@ float ComputeAdaptiveSharpness(int2 pixelCoord)
     return clamp(setSharpness, 0.0, 2.0);
 }
 
-float3 ApplyDebugTint(float3 color, float baseSharpness, float adaptiveSharpness, float edgeSharpness,
-                      float finalSharpness, float distanceBoost, int debugMode)
+float3 ApplyDebugTint(
+    float3 color,
+    float baseSharpness,
+    float adaptiveSharpness,
+    float edgeSharpness,
+    float finalSharpness,
+    float distanceBoost,
+    int debugMode)
 {
     float motionBoost = max(adaptiveSharpness - baseSharpness, 0.0);
     float motionReduce = max(baseSharpness - adaptiveSharpness, 0.0);
 
-    // Blue should mean edge-based sharpen reduction only.
+    // Blue means edge-based sharpen reduction only.
     float edgeReduce = max(adaptiveSharpness - edgeSharpness, 0.0);
 
     float distanceIncrease = max(distanceBoost - 1.0, 0.0);
@@ -283,27 +263,30 @@ float3 ApplyDebugTint(float3 color, float baseSharpness, float adaptiveSharpness
     return color;
 }
 
-float ComputeEdgeFactor(int2 p, float3 center, float centerDepth, float2 depthGrad)
+float ComputeEdgeFactorFromTaps(
+    float centerLuma,
+    float centerDepth,
+    float2 depthGrad,
+    float lumaUp,
+    float lumaLeft,
+    float lumaRight,
+    float lumaDown,
+    float depthUp,
+    float depthLeft,
+    float depthRight,
+    float depthDown)
 {
-    float cLuma = dot(center, float3(0.2126, 0.7152, 0.0722));
     float lumaSum = 0.0;
+    lumaSum += abs(lumaUp - centerLuma);
+    lumaSum += abs(lumaLeft - centerLuma);
+    lumaSum += abs(lumaRight - centerLuma);
+    lumaSum += abs(lumaDown - centerLuma);
 
     float depthEdge = 1.0;
-
-    [unroll]
-    for (int i = 0; i < 4; ++i)
-    {
-        int2 o = kCrossOffsets[i];
-
-        float3 tap = SafeLoadColor(p + o);
-        float tLuma = dot(tap, float3(0.2126, 0.7152, 0.0722));
-        lumaSum += abs(tLuma - cLuma);
-
-        float tapDepth = SafeLoadDepthLinearFromOutputPixel(p + o);
-        float w = DepthWeightGrad(centerDepth, tapDepth, depthGrad, o);
-
-        depthEdge = min(depthEdge, w);
-    }
+    depthEdge = min(depthEdge, DepthWeightGrad(centerDepth, depthUp, depthGrad, int2(0, -1)));
+    depthEdge = min(depthEdge, DepthWeightGrad(centerDepth, depthLeft, depthGrad, int2(-1, 0)));
+    depthEdge = min(depthEdge, DepthWeightGrad(centerDepth, depthRight, depthGrad, int2(1, 0)));
+    depthEdge = min(depthEdge, DepthWeightGrad(centerDepth, depthDown, depthGrad, int2(0, 1)));
 
     // Average visible brightness difference around this pixel.
     float lumaAvg = lumaSum * 0.25;
@@ -319,21 +302,34 @@ float ComputeEdgeFactor(int2 p, float3 center, float centerDepth, float2 depthGr
     return lerp(1.0, depthEdge, depthTrust);
 }
 
-float ComputeLocalLumaRange(int2 p, float centerLuma)
+float ComputeLocalLumaRangeFromTaps(
+    float centerLuma,
+    float lumaUp,
+    float lumaLeft,
+    float lumaRight,
+    float lumaDown)
 {
     float lMin = centerLuma;
     float lMax = centerLuma;
 
-    [unroll]
-    for (int i = 0; i < 4; ++i)
-    {
-        float3 tap = SafeLoadColor(p + kCrossOffsets[i]);
-        float l = dot(tap, float3(0.2126, 0.7152, 0.0722));
-        lMin = min(lMin, l);
-        lMax = max(lMax, l);
-    }
+    lMin = min(lMin, lumaUp);
+    lMax = max(lMax, lumaUp);
+
+    lMin = min(lMin, lumaLeft);
+    lMax = max(lMax, lumaLeft);
+
+    lMin = min(lMin, lumaRight);
+    lMax = max(lMax, lumaRight);
+
+    lMin = min(lMin, lumaDown);
+    lMax = max(lMax, lumaDown);
 
     return lMax - lMin;
+}
+
+float Max3(float3 v)
+{
+    return max(v.r, max(v.g, v.b));
 }
 
 // -----------------------------------------------------------------------------
@@ -349,7 +345,6 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         return;
 
     float3 c = SafeLoadColor(p);
-
     float adaptiveSharpness = ComputeAdaptiveSharpness(p);
 
     if (adaptiveSharpness <= 0.0)
@@ -366,18 +361,61 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    // -------------------------------------------------------------------------
+    // Shared center/cross data
+    // -------------------------------------------------------------------------
+
     float centerDepth = SafeLoadDepthLinearFromOutputPixel(p);
-    float2 depthGrad = EstimateDepthGradient(p, centerDepth);
+    float centerLuma = dot(c, kLumaCoeff);
 
-    // Pre-load cross depths
-    float crossDepths[4];
-    [unroll]
-    for (int i = 0; i < 4; ++i)
-        crossDepths[i] = SafeLoadDepthLinearFromOutputPixel(p + kCrossOffsets[i]);
+    int2 pUp = p + int2(0, -1);
+    int2 pLeft = p + int2(-1, 0);
+    int2 pRight = p + int2(1, 0);
+    int2 pDown = p + int2(0, 1);
 
-    // Combined luma + depth edge factor
-    float edgeFactor = ComputeEdgeFactor(p, c, centerDepth, depthGrad);
-    float edgeSharpness = adaptiveSharpness * lerp(0.65, 1.0, edgeFactor);
+    // Cached cross-neighbor colors. These replace repeated loads in edge/luma/RCAS paths.
+    float3 colorUp = SafeLoadColor(pUp);
+    float3 colorLeft = SafeLoadColor(pLeft);
+    float3 colorRight = SafeLoadColor(pRight);
+    float3 colorDown = SafeLoadColor(pDown);
+
+    // Cached cross-neighbor depths. These replace repeated depth loads and linearization.
+    float depthUp = SafeLoadDepthLinearFromOutputPixel(pUp);
+    float depthLeft = SafeLoadDepthLinearFromOutputPixel(pLeft);
+    float depthRight = SafeLoadDepthLinearFromOutputPixel(pRight);
+    float depthDown = SafeLoadDepthLinearFromOutputPixel(pDown);
+
+    // Cached lumas derived from cached colors.
+    float lumaUp = dot(colorUp, kLumaCoeff);
+    float lumaLeft = dot(colorLeft, kLumaCoeff);
+    float lumaRight = dot(colorRight, kLumaCoeff);
+    float lumaDown = dot(colorDown, kLumaCoeff);
+
+    // -------------------------------------------------------------------------
+    // Adaptive sharpness / edge protection
+    // -------------------------------------------------------------------------
+
+    float2 depthGrad = EstimateDepthGradientFromTaps(
+        centerDepth,
+        depthUp,
+        depthLeft,
+        depthRight,
+        depthDown);
+
+    float edgeFactor = ComputeEdgeFactorFromTaps(
+        centerLuma,
+        centerDepth,
+        depthGrad,
+        lumaUp,
+        lumaLeft,
+        lumaRight,
+        lumaDown,
+        depthUp,
+        depthLeft,
+        depthRight,
+        depthDown);
+
+    float edgeSharpness = adaptiveSharpness * lerp(0.2, 1.0, edgeFactor);
 
     float distanceBoost = DistanceSharpnessBoost(centerDepth);
     float motionStability = saturate(adaptiveSharpness / max(Sharpness, 1e-4));
@@ -385,7 +423,12 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     float boostedSharpness = edgeSharpness * distanceBoost;
 
-    float lumaRange = ComputeLocalLumaRange(p, dot(c, float3(0.2126, 0.7152, 0.0722)));
+    float lumaRange = ComputeLocalLumaRangeFromTaps(
+        centerLuma,
+        lumaUp,
+        lumaLeft,
+        lumaRight,
+        lumaDown);
 
     float unstable = saturate((lumaRange - 0.12) * 4.0);
     unstable *= unstable;
@@ -393,40 +436,32 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     boostedSharpness *= lerp(1.0, 0.9, unstable);
     float finalSharpness = min(boostedSharpness, 2.0);
 
+    // -------------------------------------------------------------------------
+    // RCAS 4-neighbor pattern
+    // -------------------------------------------------------------------------
+
     float3 e = c;
 
-    // RCAS 4-neighbor pattern
-    float3 bRaw = SafeLoadColor(p + int2(0, -1));
-    float3 dRaw = SafeLoadColor(p + int2(-1, 0));
-    float3 fRaw = SafeLoadColor(p + int2(1, 0));
-    float3 hRaw = SafeLoadColor(p + int2(0, 1));
-                
-    // Normalize RCAS into a local 0..1-ish range for HDR/pre-tonemap input.
-    // Use the original taps before depth rejection so the scale reflects the
-    // true local neighborhood.
-    float localScale = max(
-        max(e.r, max(e.g, e.b)),
-        max(
-            max(bRaw.r, max(bRaw.g, bRaw.b)),
-            max(
-                max(dRaw.r, max(dRaw.g, dRaw.b)),
-                max(
-                    max(fRaw.r, max(fRaw.g, fRaw.b)),
-                    max(hRaw.r, max(hRaw.g, hRaw.b))
-                )
-            )
-        )
-    );
+    // Keep original RCAS naming convention.
+    float3 bRaw = colorUp;
+    float3 dRaw = colorLeft;
+    float3 fRaw = colorRight;
+    float3 hRaw = colorDown;
 
+    // Normalize RCAS into a local 0..1-ish range for HDR/pre-tonemap input.
+    // Use original taps before depth rejection so the scale reflects the true local neighborhood.
+    float localScale = Max3(e);
+    localScale = max(localScale, Max3(bRaw));
+    localScale = max(localScale, Max3(dRaw));
+    localScale = max(localScale, Max3(fRaw));
+    localScale = max(localScale, Max3(hRaw));
     localScale = max(localScale, 1e-4);
 
     // Depth weights for cross taps.
-    // crossDepths order matches kCrossOffsets:
-    // 0 = up, 1 = left, 2 = right, 3 = down
-    float wb = DepthWeightGrad(centerDepth, crossDepths[0], depthGrad, int2(0, -1));
-    float wd = DepthWeightGrad(centerDepth, crossDepths[1], depthGrad, int2(-1, 0));
-    float wf = DepthWeightGrad(centerDepth, crossDepths[2], depthGrad, int2(1, 0));
-    float wh = DepthWeightGrad(centerDepth, crossDepths[3], depthGrad, int2(0, 1));
+    float wb = DepthWeightGrad(centerDepth, depthUp, depthGrad, int2(0, -1));
+    float wd = DepthWeightGrad(centerDepth, depthLeft, depthGrad, int2(-1, 0));
+    float wf = DepthWeightGrad(centerDepth, depthRight, depthGrad, int2(1, 0));
+    float wh = DepthWeightGrad(centerDepth, depthDown, depthGrad, int2(0, 1));
 
     // Prevent RCAS from pulling color across depth discontinuities.
     // Unsafe neighbors are blended back toward center.
@@ -441,13 +476,13 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     float3 fn = f / localScale;
     float3 hn = h / localScale;
 
-    // RCAS min/max ring
+    // RCAS min/max ring.
     float3 minRGB = min(min(bn, dn), min(fn, hn));
     float3 maxRGB = max(max(bn, dn), max(fn, hn));
 
     float2 peakC = float2(1.0, -4.0);
 
-    // limiter
+    // Limiter.
     float3 hitMin = minRGB / max(4.0 * maxRGB, 1e-5);
     float3 hitMax = (peakC.xxx - maxRGB) / max(4.0 * minRGB + peakC.yyy, -1e-5);
 
@@ -459,7 +494,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     float rcpL = rcp(4.0 * lobe + 1.0);
 
     float3 output = (((bn + dn + fn + hn) * lobe + en) * rcpL) * localScale;
-    
+
     if (Debug > 0)
         output = ApplyDebugTint(output, Sharpness, adaptiveSharpness, edgeSharpness, finalSharpness, distanceBoost, Debug);
 
@@ -615,35 +650,23 @@ float SafeLoadDepthLinearFromOutputPixel(int2 pixelCoord)
     return LinearizeDepth(SafeLoadRawDepthAtCoord(depthCoord));
 }
 
-float3 FastSCurve(float3 x)
-{
-    return x / (1.0 + abs(x));
-}
-
+// Algebraically folded version of the original RemapLocalContrast:
+// d = 0.7 * 6.0 * (x - center) = 4.2 * (x - center)
+// amount * 1.3 * 0.7 / 6.0 = amount * 0.15166667
 float3 RemapLocalContrast(float3 x, float3 center, float amount)
 {
-    float3 s = 6.0.xxx;
-
-    float3 d = 0.7 * s * (x - center);
-    d = clamp(d, -1.25.xxx, 1.25.xxx);
-
-    float LCInternalGain = 1.5;
-    float3 curve = amount * LCInternalGain * 0.7 * (sin(d * 3.14159265) + tanh(d * 4.0)) / s;
+    float3 d = clamp(4.2 * (x - center), -1.0.xxx, 1.0.xxx);
+    float3 curve = amount * 0.15166667 * (sin(d * 3.14159265) + tanh(d * 4.0));
 
     return x + curve;
 }
 
-float2 EstimateDepthGradient(int2 p, float centerDepth)
+float2 EstimateDepthGradient(float centerDepth, float depthCross[4])
 {
-    float r = SafeLoadDepthLinearFromOutputPixel(p + int2(1, 0));
-    float l = SafeLoadDepthLinearFromOutputPixel(p + int2(-1, 0));
-    float u = SafeLoadDepthLinearFromOutputPixel(p + int2(0, 1));
-    float d = SafeLoadDepthLinearFromOutputPixel(p + int2(0, -1));
-
-    float gxF = r - centerDepth;
-    float gxB = centerDepth - l;
-    float gyF = u - centerDepth;
-    float gyB = centerDepth - d;
+    float gxF = depthCross[2] - centerDepth;
+    float gxB = centerDepth - depthCross[1];
+    float gyF = depthCross[3] - centerDepth;
+    float gyB = centerDepth - depthCross[0];
 
     float gx = abs(gxF) < abs(gxB) ? gxF : gxB;
     float gy = abs(gyF) < abs(gyB) ? gyF : gyB;
@@ -654,14 +677,13 @@ float2 EstimateDepthGradient(int2 p, float centerDepth)
 
 // Soft gradient-aware weight for edge detection/debug logic.
 // Keeps a floor so edge factor does not collapse too aggressively.
-float DepthWeightGradSoft(float centerDepth, float sampleDepth, float2 gradient, int2 offset)
+float DepthWeightGradSoft(float centerDepth, float invCenterDepth, float sampleDepth, float2 gradient, int2 offset)
 {
     float predicted = centerDepth + dot(float2(offset), gradient);
-    float residual = abs(sampleDepth - predicted);
+    float residual = abs(sampleDepth - predicted) * invCenterDepth;
 
-    residual /= max(abs(centerDepth), 1e-4);
     residual = max(residual - DepthBias - 1e-5, 0.0);
-    
+
     float w = saturate(1.0 - residual * DepthScale);
 
     return lerp(0.65, 1.0, w);
@@ -670,12 +692,11 @@ float DepthWeightGradSoft(float centerDepth, float sampleDepth, float2 gradient,
 // Hard gradient-aware weight for actual sharpening taps.
 // This is the important one: no 0.65 floor, and gradient prediction avoids
 // treating smooth depth slopes as edges.
-float DepthWeightTapGrad(float centerDepth, float sampleDepth, float2 gradient, int2 offset)
+float DepthWeightTapGrad(float centerDepth, float invCenterDepth, float sampleDepth, float2 gradient, int2 offset)
 {
     float predicted = centerDepth + dot(float2(offset), gradient);
-    float residual = abs(sampleDepth - predicted);
+    float residual = abs(sampleDepth - predicted) * invCenterDepth;
 
-    residual /= max(abs(centerDepth), 1e-4);
     residual = max(residual - DepthBias - 1e-5, 0.0);
 
     float w = saturate(1.0 - residual * DepthScale);
@@ -747,24 +768,18 @@ float3 ApplyDebugTint(float3 color, float baseSharpness, float adaptiveSharpness
     return color;
 }
 
-float ComputeEdgeFactor(int2 p, float3 center, float centerDepth, float2 depthGrad)
+float ComputeEdgeFactor(float centerLuma, float centerDepth, float invCenterDepth,
+                        float2 depthGrad, float lumaCross[4], float depthCross[4])
 {
-    float cLuma = Luma(center);
     float lumaSum = 0.0;
     float depthEdge = 1.0;
 
     [unroll]
     for (int i = 0; i < 4; ++i)
     {
-        int2 o = kCrossOffsets[i];
+        lumaSum += abs(lumaCross[i] - centerLuma);
 
-        float3 tap = SafeLoadColor(p + o);
-        float tLuma = Luma(tap);
-        lumaSum += abs(tLuma - cLuma);
-
-        float tapDepth = SafeLoadDepthLinearFromOutputPixel(p + o);
-        float w = DepthWeightGradSoft(centerDepth, tapDepth, depthGrad, o);
-
+        float w = DepthWeightGradSoft(centerDepth, invCenterDepth, depthCross[i], depthGrad, kCrossOffsets[i]);
         depthEdge = min(depthEdge, w);
     }
 
@@ -778,7 +793,7 @@ float ComputeEdgeFactor(int2 p, float3 center, float centerDepth, float2 depthGr
     return lerp(1.0, depthEdge, depthTrust);
 }
 
-float ComputeLocalLumaRange(int2 p, float centerLuma)
+float ComputeLocalLumaRange(float centerLuma, float lumaCross[4])
 {
     float lMin = centerLuma;
     float lMax = centerLuma;
@@ -786,21 +801,11 @@ float ComputeLocalLumaRange(int2 p, float centerLuma)
     [unroll]
     for (int i = 0; i < 4; ++i)
     {
-        float3 tap = SafeLoadColor(p + kCrossOffsets[i]);
-        float l = Luma(tap);
-
-        lMin = min(lMin, l);
-        lMax = max(lMax, l);
+        lMin = min(lMin, lumaCross[i]);
+        lMax = max(lMax, lumaCross[i]);
     }
 
     return lMax - lMin;
-}
-
-float LumaSimilarityWeight(float centerLuma, float tapLuma)
-{
-    float dl = abs(tapLuma - centerLuma);
-
-    return saturate(1.0 - max(dl - 0.12, 0.0) * 3.0);
 }
 
 // -----------------------------------------------------------------------------
@@ -834,24 +839,47 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         return;
     }
 
+    // Cache center depth and inverse center depth once.
     float centerDepth = SafeLoadDepthLinearFromOutputPixel(p);
-    float2 depthGrad = EstimateDepthGradient(p, centerDepth);
+    float invCenterDepth = 1.0 / max(abs(centerDepth), 1e-4);
 
-    float crossDepths[4];
-
-    [unroll]
-    for (int i = 0; i < 4; ++i)
-        crossDepths[i] = SafeLoadDepthLinearFromOutputPixel(p + kCrossOffsets[i]);
-
-    float diagDepths[4];
+    // Cache cross taps once. These are reused by gradient estimation,
+    // edge detection, local luma range, local scale, and the Laplacian pass.
+    float3 cCross[4];
+    float depthCross[4];
+    float lumaCross[4];
 
     [unroll]
     for (int i = 0; i < 4; ++i)
-        diagDepths[i] = SafeLoadDepthLinearFromOutputPixel(p + kDiagOffsets[i]);
+    {
+        int2 q = p + kCrossOffsets[i];
 
+        cCross[i] = SafeLoadColor(q);
+        depthCross[i] = SafeLoadDepthLinearFromOutputPixel(q);
+        lumaCross[i] = Luma(cCross[i]);
+    }
+
+    // Cache diagonal taps once. These are reused by local scale and the Laplacian pass.
+    float3 cDiag[4];
+    float depthDiag[4];
+
+    [unroll]
+    for (int i = 0; i < 4; ++i)
+    {
+        int2 q = p + kDiagOffsets[i];
+
+        cDiag[i] = SafeLoadColor(q);
+        depthDiag[i] = SafeLoadDepthLinearFromOutputPixel(q);
+    }
+
+    float2 depthGrad = EstimateDepthGradient(centerDepth, depthCross);
+
+    // -------------------------------------------------------------------------
     // Global adaptive reduction
-    float edgeFactor = ComputeEdgeFactor(p, c, centerDepth, depthGrad);
-    float edgeSharpness = adaptiveSharpness * lerp(0.65, 1.0, edgeFactor);
+    // -------------------------------------------------------------------------
+
+    float edgeFactor = ComputeEdgeFactor(centerLuma, centerDepth, invCenterDepth, depthGrad, lumaCross, depthCross);
+    float edgeSharpness = adaptiveSharpness * lerp(0.2, 1.0, edgeFactor);
 
     float distanceBoost = DistanceSharpnessBoost(centerDepth);
     float motionStability = saturate(adaptiveSharpness / max(Sharpness, 1e-4));
@@ -859,7 +887,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     float boostedSharpness = edgeSharpness * distanceBoost;
 
-    float lumaRange = ComputeLocalLumaRange(p, centerLuma);
+    float lumaRange = ComputeLocalLumaRange(centerLuma, lumaCross);
     float unstable = saturate((lumaRange - 0.12) * 4.0);
     unstable *= unstable;
 
@@ -876,15 +904,8 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     [unroll]
     for (int i = 0; i < 4; ++i)
     {
-        float3 tap = SafeLoadColor(p + kCrossOffsets[i]);
-        localScale = max(localScale, max(tap.r, max(tap.g, tap.b)));
-    }
-
-    [unroll]
-    for (int i = 0; i < 4; ++i)
-    {
-        float3 tap = SafeLoadColor(p + kDiagOffsets[i]);
-        localScale = max(localScale, max(tap.r, max(tap.g, tap.b)));
+        localScale = max(localScale, max(cCross[i].r, max(cCross[i].g, cCross[i].b)));
+        localScale = max(localScale, max(cDiag[i].r, max(cDiag[i].g, cDiag[i].b)));
     }
 
     localScale = max(localScale, 0.06);
@@ -894,15 +915,11 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     float4 L0 = float4(cn, 1.0) * 4.0;
 
     [unroll]
-    for (int j = 0; j < 4; ++j)
+    for (int i = 0; i < 4; ++i)
     {
-        int2 o = kCrossOffsets[j];
-        int2 q = p + o;
+        float3 tapN = cCross[i] / localScale;
 
-        float3 tap = SafeLoadColor(q);
-        float3 tapN = tap / localScale;
-
-        float depthW = DepthWeightTapGrad(centerDepth, crossDepths[j], depthGrad, o);
+        float depthW = DepthWeightTapGrad(centerDepth, invCenterDepth, depthCross[i], depthGrad, kCrossOffsets[i]);
         float w = 2.0 * depthW;
 
         G1 += float4(tapN, 1.0) * w;
@@ -910,15 +927,11 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
     }
 
     [unroll]
-    for (int k = 0; k < 4; ++k)
+    for (int i = 0; i < 4; ++i)
     {
-        int2 o = kDiagOffsets[k];
-        int2 q = p + o;
+        float3 tapN = cDiag[i] / localScale;
 
-        float3 tap = SafeLoadColor(q);
-        float3 tapN = tap / localScale;
-
-        float w = DepthWeightTapGrad(centerDepth, diagDepths[k], depthGrad, o);
+        float w = DepthWeightTapGrad(centerDepth, invCenterDepth, depthDiag[i], depthGrad, kDiagOffsets[i]);
 
         G1 += float4(tapN, 1.0) * w;
         L0 += float4(RemapLocalContrast(tapN, cn, finalSharpness), 1.0) * w;
