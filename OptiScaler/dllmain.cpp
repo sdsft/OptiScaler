@@ -1666,6 +1666,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 {
     HMODULE handle = nullptr;
     OSVERSIONINFOW winVer { 0 };
+    auto exePath = Util::ExePath().remove_filename();
 
     switch (ul_reason_for_call)
     {
@@ -1775,7 +1776,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         spdlog::info("");
         spdlog::info("Check for DLSS files");
-        auto exePath = Util::ExePath().remove_filename();
         State::Instance().NVNGX_DLSS_Path = Util::FindFilePath(exePath, "nvngx_dlss.dll");
         State::Instance().NVNGX_DLSSD_Path = Util::FindFilePath(exePath, "nvngx_dlssd.dll");
         State::Instance().NVNGX_DLSSG_Path = Util::FindFilePath(exePath, "nvngx_dlssg.dll");
