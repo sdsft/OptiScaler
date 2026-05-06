@@ -28,7 +28,7 @@
     for (auto& singleChangeBackend : State::Instance().changeBackend)                                                  \
         singleChangeBackend.second = true;
 
-constexpr float fontSize = 14.0f; // just changing this doesn't make other elements scale ideally
+static float fontSize = 14.0f; // just changing this doesn't make other elements scale ideally
 static ImVec2 overlaySize(0.0f, 0.0f);
 static ImVec2 overlayPosition(-1000.0f, -1000.0f);
 static bool _hdrTonemapApplied = false;
@@ -6768,7 +6768,9 @@ bool MenuCommon::RenderMenu()
                 ImGui::SameLine();
 
                 auto textSize = ImGui::CalcTextSize("Open Wiki (?)");
-                textSize.x += ImGui::GetStyle().FramePadding.x * 3.0f;
+                auto& style = ImGui::GetStyle();
+                textSize.x += style.FramePadding.x * 2.0f;
+                textSize.x += style.ItemSpacing.x;
 
                 float avail = ImGui::GetContentRegionAvail().x;
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + avail - textSize.x);
@@ -7117,6 +7119,9 @@ void MenuCommon::Init(HWND InHwnd, bool isUWP)
 
         // This automatically becomes the next default font
         ImFontConfig fontConfig;
+
+        if (Config::Instance()->FontSize.has_value())
+            fontSize = Config::Instance()->FontSize.value();
 
         if (Config::Instance()->TTFFontPath.has_value())
         {
