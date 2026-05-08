@@ -564,10 +564,10 @@ class FfxApiProxy
             if (fg_dx12_hooked.Dispatch != nullptr)
                 DetourAttach(&(PVOID&) fg_dx12_hooked.Dispatch, ffxDispatch_Dx12);
 
-            DetourTransactionCommit();
-
             if (fg_dx12_hooked.Query != nullptr)
                 DetourAttach(&(PVOID&) fg_dx12_hooked.Query, ffxQuery_Dx12);
+
+            DetourTransactionCommit();
 
             if (fg_dx12.dll == fg_dx12_hooked.dll)
                 fg_dx12 = fg_dx12_hooked;
