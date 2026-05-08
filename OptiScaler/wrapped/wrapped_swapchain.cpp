@@ -473,6 +473,16 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
 
         auto refCount = _real->Release();
 
+        // Release real swapchain, otherwise it can cause issues when re-creating swapchain with same handle
+        while (refCount > 0)
+        {
+            LOG_DEBUG("Waiting for real swapchain to be released, refCount: {}", refCount);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            refCount = _real->Release();
+        }
+
+        LOG_DEBUG("Real swapchain released, refCount: {}", refCount);
+
         delete this;
     }
 
