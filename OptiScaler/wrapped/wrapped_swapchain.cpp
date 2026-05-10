@@ -28,6 +28,9 @@ static double _lastFrameTime = 0;
 static bool _dx11Device = false;
 static bool _dx12Device = false;
 
+const GUID IID_IUnwrappedDXGISwapChain = {
+    0xe8a33b4a, 0x1405, 0x424c, { 0xae, 0x88, 0xd, 0x3e, 0x9d, 0x46, 0xc9, 0x14 }
+};
 static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags,
                             const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP)
 {
@@ -473,12 +476,21 @@ ULONG STDMETHODCALLTYPE WrappedIDXGISwapChain4::Release()
 
         auto refCount = _real->Release();
 
+        IDXGISwapChain* skSC = nullptr;
+        if (_real->QueryInterface(IID_IUnwrappedDXGISwapChain, (void**) &skSC) == S_OK && skSC != nullptr)
+        {
+            skSC->Release();
+            LOG_DEBUG("Found SK swapchain, skip releasing of main swapchain");
+        }
+        else
+        {
         // Release real swapchain, otherwise it can cause issues when re-creating swapchain with same handle
         while (refCount > 0)
         {
             LOG_DEBUG("Waiting for real swapchain to be released, refCount: {}", refCount);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             refCount = _real->Release();
+        }
         }
 
         LOG_DEBUG("Real swapchain released, refCount: {}", refCount);
@@ -660,6 +672,51 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
     LOG_DEBUG("BufferCount: {0}, Width: {1}, Height: {2}, NewFormat: {3}, SwapChainFlags: {4:X}", BufferCount, Width,
               Height, (UINT) NewFormat, SwapChainFlags);
 
+    // Release swapchain backbuffers to prevent errors when resizing
+    if (State::Instance().activeFgOutput != FGOutput::NoFG && State::Instance().activeFgOutput != FGOutput::Nukems &&
+        State::Instance().currentFG != nullptr)
+    {
+        IDXGISwapChain* skSC = nullptr;
+        if (_real->QueryInterface(IID_IUnwrappedDXGISwapChain, (void**) &skSC) == S_OK && skSC != nullptr)
+        {
+            skSC->Release();
+            LOG_DEBUG("Found SK swapchain, skip releasing backbuffers of main swapchain");
+        }
+        else
+        {
+            LOG_DEBUG("Releasing backbuffers, count: {}", desc.BufferCount);
+
+            for (UINT i = 0; i < desc.BufferCount; i++)
+            {
+                ID3D12Resource* backBuffer = nullptr;
+                auto bbResult = _real->GetBuffer(i, IID_PPV_ARGS(&backBuffer));
+
+                if (bbResult == S_OK)
+                {
+                    backBuffer->AddRef();
+
+                    auto refCount = backBuffer->Release();
+                    refCount = backBuffer->Release();
+                    LOG_DEBUG("Current backbuffer {}, RefCount {}", i, refCount);
+
+                    while (refCount > 1 && refCount < 4294967200ul)
+                    {
+                        refCount = backBuffer->Release();
+                        LOG_DEBUG("Releasing backbuffer {}, RefCount {}", i, refCount);
+                    }
+
+                    LOG_DEBUG("Backbuffer {}, RefCount {}", i, refCount);
+                }
+                else
+                {
+                    LOG_DEBUG("GetBuffer failed for index {}: {:X}", i, (UINT) bbResult);
+                    break;
+                }
+            }
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
     if (Config::Instance()->FGDontUseSwapchainBuffers.value_or_default())
     {
         ScopedSkipHeapCapture skipHeapCapture {};
@@ -970,6 +1027,64 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
     LOG_DEBUG("BufferCount: {}, Width: {}, Height: {}, NewFormat: {}, SwapChainFlags: {:X}", BufferCount, Width, Height,
               (UINT) Format, SwapChainFlags);
 
+    // Release swapchain backbuffers to prevent errors when resizing
+    if (State::Instance().activeFgOutput != FGOutput::NoFG && State::Instance().activeFgOutput != FGOutput::Nukems &&
+        State::Instance().currentFG != nullptr)
+    {
+        IDXGISwapChain* skSC = nullptr;
+        if (_real->QueryInterface(IID_IUnwrappedDXGISwapChain, (void**) &skSC) == S_OK && skSC != nullptr)
+        {
+            skSC->Release();
+            LOG_DEBUG(
+                "Found SK swapchain, skip releasing backbuffersand using ResizeBuffers instead of ResizeBuffers1");
+
+            if (Config::Instance()->FGDontUseSwapchainBuffers.value_or_default())
+            {
+                ScopedSkipHeapCapture skipHeapCapture {};
+
+                _lastFlags = SwapChainFlags;
+                result = _real3->ResizeBuffers(BufferCount, Width, Height, Format, SwapChainFlags);
+            }
+            else
+            {
+                _lastFlags = SwapChainFlags;
+                result = _real3->ResizeBuffers(BufferCount, Width, Height, Format, SwapChainFlags);
+            }
+        }
+        else
+        {
+            LOG_DEBUG("Releasing backbuffers, count: {}", desc.BufferCount);
+
+            for (UINT i = 0; i < desc.BufferCount; i++)
+            {
+                ID3D12Resource* backBuffer = nullptr;
+                auto bbResult = _real->GetBuffer(i, IID_PPV_ARGS(&backBuffer));
+
+                if (bbResult == S_OK)
+                {
+                    backBuffer->AddRef();
+
+                    auto refCount = backBuffer->Release();
+                    refCount = backBuffer->Release();
+                    LOG_DEBUG("Current backbuffer {}, RefCount {}", i, refCount);
+
+                    while (refCount > 1 && refCount < 4294967200ul)
+                    {
+                        refCount = backBuffer->Release();
+                        LOG_DEBUG("Releasing backbuffer {}, RefCount {}", i, refCount);
+                    }
+
+                    LOG_DEBUG("Backbuffer {}, RefCount {}", i, refCount);
+                }
+                else
+                {
+                    LOG_DEBUG("GetBuffer failed for index {}: {:X}", i, (UINT) bbResult);
+                    break;
+                }
+            }
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     if (Config::Instance()->FGDontUseSwapchainBuffers.value_or_default())
     {
         ScopedSkipHeapCapture skipHeapCapture {};
@@ -983,6 +1098,7 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
         _lastFlags = SwapChainFlags;
         result = _real3->ResizeBuffers1(BufferCount, Width, Height, Format, SwapChainFlags, pCreationNodeMask,
                                         ppPresentQueue);
+    }
     }
 
     if (result == S_OK && State::Instance().currentFeature == nullptr)
