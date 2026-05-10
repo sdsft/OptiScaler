@@ -31,6 +31,58 @@ static bool _dx12Device = false;
 const GUID IID_IUnwrappedDXGISwapChain = {
     0xe8a33b4a, 0x1405, 0x424c, { 0xae, 0x88, 0xd, 0x3e, 0x9d, 0x46, 0xc9, 0x14 }
 };
+
+static ID3D12Fence* resizeFence = nullptr;
+static UINT64 resizeFenceValue = 0;
+static HANDLE resizeFenceEvent = nullptr;
+
+static void WaitForGPUIdle(IUnknown* object)
+{
+    if (State::Instance().currentD3D12Device == nullptr || object == nullptr)
+        return;
+
+    ID3D12CommandQueue* queue = nullptr;
+
+    if (object->QueryInterface(IID_PPV_ARGS(&queue)) == S_OK)
+    {
+        LOG_DEBUG("Command queue obtained for GPU idle wait");
+        queue->Release();
+    }
+
+    if (queue != nullptr && resizeFence != nullptr && resizeFenceEvent != nullptr)
+    {
+        if (State::Instance().currentD3D12Device != nullptr)
+        {
+            if (resizeFence != nullptr)
+            {
+                resizeFence->Release();
+                resizeFence = nullptr;
+            }
+
+            if (resizeFenceEvent != nullptr)
+            {
+                CloseHandle(resizeFenceEvent);
+                resizeFenceEvent = nullptr;
+            }
+
+            State::Instance().currentD3D12Device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&resizeFence));
+            resizeFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        }
+
+        LOG_DEBUG("Waiting for GPU to finish before resizing buffers");
+
+        resizeFenceValue++;
+        queue->Signal(resizeFence, resizeFenceValue);
+
+        if (resizeFence->GetCompletedValue() < resizeFenceValue)
+        {
+            resizeFence->SetEventOnCompletion(resizeFenceValue, resizeFenceEvent);
+            // Max 5 sec
+            auto waitResult = WaitForSingleObject(resizeFenceEvent, 5000);
+            LOG_DEBUG("WaitForSingleObject result: {:X}", waitResult);
+        }
+    }
+}
 static HRESULT LocalPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags,
                             const DXGI_PRESENT_PARAMETERS* pPresentParameters, IUnknown* pDevice, HWND hWnd, bool isUWP)
 {
@@ -672,6 +724,8 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers(UINT BufferCount
     LOG_DEBUG("BufferCount: {0}, Width: {1}, Height: {2}, NewFormat: {3}, SwapChainFlags: {4:X}", BufferCount, Width,
               Height, (UINT) NewFormat, SwapChainFlags);
 
+    WaitForGPUIdle(_device);
+
     // Release swapchain backbuffers to prevent errors when resizing
     if (State::Instance().activeFgOutput != FGOutput::NoFG && State::Instance().activeFgOutput != FGOutput::Nukems &&
         State::Instance().currentFG != nullptr)
@@ -1026,6 +1080,8 @@ HRESULT STDMETHODCALLTYPE WrappedIDXGISwapChain4::ResizeBuffers1(UINT BufferCoun
 
     LOG_DEBUG("BufferCount: {}, Width: {}, Height: {}, NewFormat: {}, SwapChainFlags: {:X}", BufferCount, Width, Height,
               (UINT) Format, SwapChainFlags);
+
+    WaitForGPUIdle(_device);
 
     // Release swapchain backbuffers to prevent errors when resizing
     if (State::Instance().activeFgOutput != FGOutput::NoFG && State::Instance().activeFgOutput != FGOutput::Nukems &&
