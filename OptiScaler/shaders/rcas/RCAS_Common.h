@@ -919,13 +919,8 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     float3 detail = cn - L0.rgb;
 
-    // Extra residual gain for your pipeline.
-    // finalSharpness = 0.0 -> original color
-    // finalSharpness = 1.0 -> stronger 
-    // finalSharpness = 2.0 -> very strong test
-    // float detailGain = 1.0 + finalSharpness * 3.0;
     float remapAmount = finalSharpness;
-    float detailGain = lerp(1.0, 5.0, saturate(finalSharpness * 0.5));
+    float detailGain = lerp(1.0, 2.5, saturate(finalSharpness * 0.5));
 
     float3 output = G1.rgb + detail * detailGain;
     output = max(output, 0.0);
