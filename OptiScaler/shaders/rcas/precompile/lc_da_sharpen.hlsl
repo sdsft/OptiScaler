@@ -391,6 +391,16 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     float finalSharpness = clamp(boostedSharpness, 0.0, 2.0);
 
+    float sharpT = saturate(finalSharpness * 0.5);
+
+    // Slight strength increase, but not too much.
+    float remapAmount = finalSharpness * 0.75;
+
+    // Positive detail gets stronger.
+    // Negative detail is restrained to reduce dark halos.
+    float detailGainPos = lerp(1.0, 1.85, sharpT);
+    float detailGainNeg = lerp(1.0, 1.18, sharpT);
+
     // -------------------------------------------------------------------------
     // Local Laplacian core
     // -------------------------------------------------------------------------
@@ -409,7 +419,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         float w = 2.0 * depthW;
 
         G1 += float4(tap, 1.0) * w;
-        L0 += float4(FastRemapLocalContrast(tap, cn, finalSharpness), 1.0) * w;
+        L0 += float4(FastRemapLocalContrast(tap, cn, remapAmount), 1.0) * w;
     }
 
     [unroll]
@@ -420,7 +430,7 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
         float w = DepthWeightTapGrad(centerDepth, invCenterDepth, depthDiag[i], depthGrad, kDiagOffsets[i]);
 
         G1 += float4(tap, 1.0) * w;
-        L0 += float4(FastRemapLocalContrast(tap, cn, finalSharpness), 1.0) * w;
+        L0 += float4(FastRemapLocalContrast(tap, cn, remapAmount), 1.0) * w;
     }
 
     G1.rgb /= max(G1.w, 1e-5);
@@ -428,10 +438,10 @@ void CSMain(uint3 DTid : SV_DispatchThreadID)
 
     float3 detail = cn - L0.rgb;
 
-    float remapAmount = finalSharpness;
-    float detailGain = lerp(1.0, 2.5, saturate(finalSharpness * 0.5));
+    float3 detailApplied = max(detail, 0.0.xxx) * detailGainPos +
+                           min(detail, 0.0.xxx) * detailGainNeg;
 
-    float3 output = G1.rgb + detail * detailGain;
+    float3 output = G1.rgb + detailApplied;
     output = max(output, 0.0);
 
     if (Debug > 0)
