@@ -335,8 +335,8 @@ void UpscalerInputsDx11wDx12::UpscaleEnd(NVSDK_NGX_Parameter* InParameters, IFea
                 if (SUCCEEDED(output->QueryInterface(IID_PPV_ARGS(&outputTexture))) && outputTexture != nullptr)
                 {
                     Dx11ResourceInfo info = {};
-                    if (Hudfix_Dx11::FillResourceInfo(outputTexture, Dx11ResourceType::UAV,
-                                                      Dx11CaptureInfo::Upscaler, &info))
+                    if (Hudfix_Dx11::FillResourceInfo(outputTexture, Dx11ResourceType::UAV, Dx11CaptureInfo::Upscaler,
+                                                      &info))
                     {
                         Hudfix_Dx11::CheckForHudless(Dx11WithDx12::GetD3D11DeviceContext(), &info, true);
                     }

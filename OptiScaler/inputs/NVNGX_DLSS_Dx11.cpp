@@ -797,9 +797,9 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_NGX_D3D11_EvaluateFeature(ID3D11DeviceConte
         return NVSDK_NGX_Result_Success;
     }
 
-    const bool suppressDx11HudfixTracking =
-        state.activeFgInput == FGInput::Upscaler && Config::Instance()->FGHUDFix.value_or_default() &&
-        state.swapchainInteropApi == SwapchainInteropApi::Dx11wDx12;
+    const bool suppressDx11HudfixTracking = state.activeFgInput == FGInput::Upscaler &&
+                                            Config::Instance()->FGHUDFix.value_or_default() &&
+                                            state.swapchainInteropApi == SwapchainInteropApi::Dx11wDx12;
     if (suppressDx11HudfixTracking)
         Hudfix_Dx11::SetSkipStatus(true);
 
